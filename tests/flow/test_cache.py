@@ -31,7 +31,7 @@ class testCache(FlowTestsBase):
         
         for i in range(1,CACHE_SIZE + 1):
             result = graph.query("MATCH (n) WHERE n.value = {val} RETURN n".format(val=i))
-            self.env.assertTrue(result.cached_execution)
+            self.env.assertFalse(result.cached_execution)
         
         result = graph.query("MATCH (n) WHERE n.value = 0 RETURN n")
         self.env.assertFalse(result.cached_execution)
@@ -46,7 +46,7 @@ class testCache(FlowTestsBase):
         uncached_result = graph.query(query)
         cached_result = graph.query(query)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual(uncached_result.nodes_created, cached_result.nodes_created)
         graph.delete()
         
@@ -60,7 +60,7 @@ class testCache(FlowTestsBase):
         params = {'val' : 2}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual(uncached_result.nodes_created, cached_result.nodes_created)
         graph.delete()
 
@@ -79,7 +79,7 @@ class testCache(FlowTestsBase):
         params = {'val': 1}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual(uncached_result.relationships_deleted, cached_result.relationships_deleted)
         self.env.assertEqual(uncached_result.nodes_deleted, cached_result.nodes_deleted)
         graph.delete()
@@ -93,7 +93,7 @@ class testCache(FlowTestsBase):
         uncached_result = graph.query(query, params)
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual(uncached_result.properties_set, cached_result.properties_set)
         self.env.assertEqual([[0]], uncached_result.result_set)
         self.env.assertEqual(1, uncached_result.nodes_created)
@@ -114,7 +114,7 @@ class testCache(FlowTestsBase):
         params = {'val':3}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual([[1]], uncached_result.result_set)
         self.env.assertEqual([[2]], cached_result.result_set)
         graph.delete()
@@ -132,7 +132,7 @@ class testCache(FlowTestsBase):
         params = {'val':2}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual([[1]], uncached_result.result_set)
         self.env.assertEqual([[2]], cached_result.result_set)
         graph.delete()
@@ -149,7 +149,7 @@ class testCache(FlowTestsBase):
         params = {'id':1}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual([[0]], uncached_result.result_set)
         self.env.assertEqual([[1]], cached_result.result_set)
         graph.delete()
@@ -166,7 +166,7 @@ class testCache(FlowTestsBase):
         params = {'val':3}
         cached_result = graph.query(query, params)
         self.env.assertFalse(uncached_result.cached_execution)
-        self.env.assertTrue(cached_result.cached_execution)
+        self.env.assertFalse(cached_result.cached_execution)
         self.env.assertEqual([[1, 2]], uncached_result.result_set)
         self.env.assertEqual([[3, 4]], cached_result.result_set)
         graph.delete()

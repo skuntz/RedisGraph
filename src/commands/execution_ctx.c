@@ -11,12 +11,15 @@
 static ExecutionType _GetExecutionTypeFromAST(AST *ast) {
 	const cypher_astnode_type_t root_type = cypher_astnode_type(ast->root);
 	if(root_type == CYPHER_AST_QUERY) return EXECUTION_TYPE_QUERY;
-	if(root_type == CYPHER_AST_CREATE_NODE_PROPS_INDEX) return EXECUTION_TYPE_INDEX_CREATE;
-	if(root_type == CYPHER_AST_DROP_NODE_PROPS_INDEX) return EXECUTION_TYPE_INDEX_DROP;
+	if(root_type == CYPHER_AST_CREATE_NODE_PROPS_INDEX) return
+			EXECUTION_TYPE_INDEX_CREATE;
+	if(root_type == CYPHER_AST_DROP_NODE_PROPS_INDEX) return
+			EXECUTION_TYPE_INDEX_DROP;
 	assert(false && "Uknown execution type");
 }
 
-static ExecutionCtx *_ExecutionCtx_New(AST *ast, ExecutionPlan *plan, ExecutionType exec_type) {
+static ExecutionCtx *_ExecutionCtx_New(AST *ast, ExecutionPlan *plan,
+									   ExecutionType exec_type) {
 	ExecutionCtx *exec_ctx = rm_calloc(1, sizeof(ExecutionCtx));
 	exec_ctx->ast = ast;
 	exec_ctx->plan = plan;
@@ -32,7 +35,8 @@ static ExecutionCtx _ExecutionCtx_Clone(const ExecutionCtx orig) {
 	return ctx;
 }
 
-static ExecutionCtx *_ExecutionCtx_FromCache(Cache *cache, const char *query_string,
+static ExecutionCtx *_ExecutionCtx_FromCache(Cache *cache,
+											 const char *query_string,
 											 cypher_parse_result_t *params_parse_result) {
 	// Check the cache to see if we already have a cached context for this query.
 	ExecutionCtx *cached_exec_ctx = Cache_GetValue(cache, query_string);
@@ -69,18 +73,6 @@ ExecutionCtx ExecutionCtx_FromQuery(const char *query) {
 	// Return invalid execution context if there isn't a parser result.
 	if(params_parse_result == NULL) return invalid_ctx;
 
-	GraphContext *gc = QueryCtx_GetGraphCtx();
-	Cache *cache = GraphContext_GetCache(gc);
-	// Check the cache to see if we already have a cached context for this query.
-	ExecutionCtx *cached_exec_ctx = _ExecutionCtx_FromCache(cache, query_string, params_parse_result);
-	if(cached_exec_ctx) {
-		ExecutionCtx ctx = _ExecutionCtx_Clone(*cached_exec_ctx);
-		// Set parameters parse result in the execution ast.
-		AST_SetParamsParseResult(ctx.ast, params_parse_result);
-		ctx.cached = true;
-		return ctx;
-	}
-
 	// No cached execution plan, try to parse the query.
 	AST *ast = _ExecutionCtx_ParseAST(query_string, params_parse_result);
 	// Invalid query, return invalid execution context.
@@ -91,13 +83,6 @@ ExecutionCtx ExecutionCtx_FromQuery(const char *query) {
 	// In case of valid query, create execution plan, and cache it and the AST.
 	if(exec_type == EXECUTION_TYPE_QUERY) {
 		plan = NewExecutionPlan();
-		// Created new valid execution context.
-		ExecutionCtx *exec_ctx_to_cache = _ExecutionCtx_New(ast, plan, exec_type);
-		// Cache execution context.
-		Cache_SetValue(cache, query_string, exec_ctx_to_cache);
-		// Clone execution plan and ast that will be used in the current execution.
-		plan = ExecutionPlan_Clone(plan);
-		ast = AST_ShallowCopy(ast);
 	}
 	ExecutionCtx ctx = {.ast = ast, .plan = plan, .exec_type = exec_type, .cached = false};
 	return ctx;
