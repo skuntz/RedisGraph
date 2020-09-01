@@ -95,7 +95,10 @@ CC_DEPS = $(patsubst %.c, %.d, $(CC_SOURCES) )
 # Library dependencies
 RAX=../deps/rax/rax.o
 LIBXXHASH=../deps/xxHash/libxxhash.a
-GRAPHBLAS=../deps/GraphBLAS/build/libgraphblas.a
+#GRAPHBLAS=../deps/GraphBLAS/build/libgraphblas.a
+# The following is for x86, with the dummy SCGC API
+GRAPHBLAS=../../LucataGraphBLAS/build/SC/libLucataGraphBLAS_SCGC.a ../../LucataGraphBLAS/build/src/lib/libLucataGraphBLAS.a
+GRAPHBLAS_INC_DIR=../../LucataGraphBLAS/src/include/
 REDISEARCH=../deps/RediSearch/build/libredisearch.a
 LIBCYPHER-PARSER=../deps/libcypher-parser/lib/src/.libs/libcypher-parser.a
 
@@ -118,7 +121,7 @@ endif
 # Compile C file while generating a .d file for it
 %.o: %.c
 %.o: %.c
-	$(REDISGRAPH_CC) $(CFLAGS) -I. -I$(RAX_DIR) -I$(LIBCYPHER-PARSER_DIR) -I$(XXHASH_DIR) -I$(REDISEARCH_DIR) -c $< -o $@ -MMD -MF $(@:.o=.d)
+	$(REDISGRAPH_CC) $(CFLAGS) -I. -I$(RAX_DIR) -I$(LIBCYPHER-PARSER_DIR) -I$(XXHASH_DIR) -I$(REDISEARCH_DIR) -I$(GRAPHBLAS_INC_DIR) -c $< -o $@ -MMD -MF $(@:.o=.d)
 
 all: redisgraph.so
 
