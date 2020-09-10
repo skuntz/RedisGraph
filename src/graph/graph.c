@@ -784,38 +784,87 @@ void Graph_DeleteNode(Graph *g, Node *n) {
 	DataBlock_DeleteItem(g->nodes, ENTITY_GET_ID(n));
 }
 
+static void free_edge (Graph *g, EdgeID id)
+{
+     if (SINGLE_EDGE(id)) {
+          DataBlock_DeleteItem (g->edges, SINGLE_EDGE_ID(id));
+     } else {
+          EdgeID *ids = (EdgeID *)id;
+          uint id_count = array_len(ids);
+          for(uint i = 0; i < id_count; i++) {
+               DataBlock_DeleteItem (g->edges, ids[i]);
+          }
+          array_free(ids);
+     }
+}
+
 static void _Graph_FreeRelationMatrices(Graph *g) {
-	if(!_select_delete_edges) {
-		// The select operator has not yet been constructed; build it now.
-		GrB_Info res;
-		res = GxB_SelectOp_new(&_select_delete_edges, _select_op_free_edge, GrB_UINT64, GrB_UINT64);
-		assert(res == GrB_SUCCESS);
-	}
-
-	GxB_Scalar thunk;
-	GxB_Scalar_new(&thunk, GrB_UINT64);
-	GxB_Scalar_setElement_UINT64(thunk, (uint64_t)g);
-
 	uint relationCount = Graph_RelationTypeCount(g);
+        GrB_Index nvals_alloc = 0;
+        GrB_Index *I = NULL, *J = NULL;
+        EdgeID *val = NULL;
 	for(uint i = 0; i < relationCount; i++) {
 		RG_Matrix M = g->relations[i];
-		// Use the edge deletion Select operator to free all edge arrays within the adjacency matrix.
-		GxB_select(M->grb_matrix, GrB_NULL, GrB_NULL, _select_delete_edges, M->grb_matrix, thunk, GrB_NULL);
+                GrB_Matrix grb_matrix = M->grb_matrix;
+                GrB_Index nvals, nvals_saved;
+                GrB_Info info;
 
+                info = GrB_Matrix_nvals (&nvals, grb_matrix);
+                assert (info == GrB_SUCCESS);
+                if (nvals > nvals_alloc) {
+                     GrB_Index *tmp;
+                     tmp = realloc (I, nvals * sizeof (*I));
+                     assert(tmp);
+                     I = tmp;
+                     tmp = realloc (J, nvals * sizeof (*J));
+                     assert(tmp);
+                     J = tmp;
+                     EdgeID *tmp_e;
+                     tmp_e = realloc (val, nvals * sizeof (*val));
+                     assert(tmp_e);
+                     val = tmp_e;
+                }
+
+#if !defined(NDEBUG)
+                nvals_saved = nvals;
+#endif
+
+                info = GrB_Matrix_extractTuples (I, J, (uintptr_t*)val, &nvals, grb_matrix);
+                assert (info == GrB_SUCCESS);
+#if !defined(NDEBUG)
+                assert (nvals == nvals_saved);
+#endif
+
+                OMP(omp parallel for)
+                for (GrB_Index k = 0; k < nvals; ++k)
+                     free_edge (g, val[k]);
+                
 		// Free the matrix itself.
 		RG_Matrix_Free(M);
 
 		// Perform the same update to transposed matrices.
 		if(Config_MaintainTranspose()) {
 			RG_Matrix TM = g->t_relations[i];
-			GxB_select(TM->grb_matrix, GrB_NULL, GrB_NULL, _select_delete_edges, TM->grb_matrix, thunk,
-					   GrB_NULL);
+                        grb_matrix = TM->grb_matrix;
+                        info = GrB_Matrix_nvals (&nvals, grb_matrix);
+                        assert (info == GrB_SUCCESS);
+#if !defined(NDEBUG)
+                        assert(nvals == nvals_saved);
+#endif
+                        info = GrB_Matrix_extractTuples (I, J, (uintptr_t*)val, &nvals, grb_matrix);
+                        assert (info == GrB_SUCCESS);
+
+                        OMP(omp parallel for)
+                        for (GrB_Index k = 0; k < nvals; ++k)
+                             free_edge (g, val[k]);
+
 			// Free the matrix itself.
 			RG_Matrix_Free(TM);
 		}
 	}
-
-	GrB_free(&thunk);
+        free (val);
+        free (J);
+        free (I);
 }
 
 static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
