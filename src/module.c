@@ -129,10 +129,12 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 	command_ctxs = calloc(threadCount + 1, sizeof(CommandCtx*));
 
 	int ompThreadCount = Config_GetOMPThreadCount();
+	/*
 	if(GxB_set(GxB_NTHREADS, ompThreadCount) != GrB_SUCCESS) {
 		RedisModule_Log(ctx, "warning", "Failed to set OpenMP thread count to %d", ompThreadCount);
 		return REDISMODULE_ERR;
 	}
+	*/
 	RedisModule_Log(ctx, "notice", "Maximum number of OpenMP threads set to %d", ompThreadCount);
 
 	if(_RegisterDataTypes(ctx) != REDISMODULE_OK) return REDISMODULE_ERR;

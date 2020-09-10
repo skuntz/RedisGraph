@@ -97,7 +97,7 @@ RAX=../deps/rax/rax.o
 LIBXXHASH=../deps/xxHash/libxxhash.a
 #GRAPHBLAS=../deps/GraphBLAS/build/libgraphblas.a
 # The following is for x86, with the dummy SCGC API
-GRAPHBLAS=../../LucataGraphBLAS/build/SC/libLucataGraphBLAS_SCGC.a ../../LucataGraphBLAS/build/src/lib/libLucataGraphBLAS.a
+GRAPHBLAS=../../LucataGraphBLAS/build_x86_SCGC/SC/libLucataGraphBLAS_SCGC.a ../../LucataGraphBLAS/build_x86_SCGC/src/lib/libLucataGraphBLAS.a ../../LucataGraphBLAS/build_x86_SCGC/SC/SCGC_DUMMY/libemuapi.a
 GRAPHBLAS_INC_DIR=../../LucataGraphBLAS/src/include/
 REDISEARCH=../deps/RediSearch/build/libredisearch.a
 LIBCYPHER-PARSER=../deps/libcypher-parser/lib/src/.libs/libcypher-parser.a
@@ -171,7 +171,7 @@ parser:
 
 # Build the module...
 redisgraph.so: $(MODULE)
-	$(REDISGRAPH_CC) -o $@ $(CC_OBJECTS) $(LIBS) $(SHOBJ_LDFLAGS) -lc -lm
+	$(REDISGRAPH_CC) -o $@ $(CC_OBJECTS) $(LIBS) $(SHOBJ_LDFLAGS) -lc -lm -lstdc++
 
 clean:
 	@find . -name '*.[oad]' -type f -delete
