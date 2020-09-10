@@ -14,7 +14,6 @@
 #include "../util/rmalloc.h"
 #include "../util/datablock/oo_datablock.h"
 
-static GrB_BinaryOp _graph_edge_accum = NULL;
 // GraphBLAS Select operator to free edge arrays and delete edges.
 static GxB_SelectOp _select_delete_edges = NULL;
 
@@ -23,27 +22,6 @@ void _MatrixResizeToCapacity(const Graph *g, RG_Matrix m);
 
 
 /* ========================= GraphBLAS functions ========================= */
-void _edge_accum(void *_z, const void *_x, const void *_y) {
-	EdgeID *z = (EdgeID *)_z;
-	const EdgeID *x = (const EdgeID *)_x;
-	const EdgeID *y = (const EdgeID *)_y;
-
-	EdgeID *ids;
-	/* Single edge ID,
-	 * switching from single edge ID to multiple IDs. */
-	if(SINGLE_EDGE(*x)) {
-		ids = array_new(EdgeID, 2);
-		ids = array_append(ids, SINGLE_EDGE_ID(*x));
-		ids = array_append(ids, SINGLE_EDGE_ID(*y));
-		// TODO: Make sure MSB of ids isn't on.
-		*z = (EdgeID)ids;
-	} else {
-		// Multiple edges, adding another edge.
-		ids = (EdgeID *)(*x);
-		ids = array_append(ids, SINGLE_EDGE_ID(*y));
-		*z = (EdgeID)ids;
-	}
-}
 
 /* GxB_select_function which delete edges and free edge arrays. */
 bool _select_op_free_edge(GrB_Index i, GrB_Index j, GrB_Index nrows, GrB_Index ncols, const void *x,
@@ -364,13 +342,6 @@ Graph *Graph_New(size_t node_cap, size_t edge_cap) {
 	// Synchronization objects initialization.
 	assert(pthread_mutex_init(&g->_writers_mutex, NULL) == 0);
 
-	// Create edge accumulator binary function
-	if(!_graph_edge_accum) {
-		GrB_Info info;
-		info = GrB_BinaryOp_new(&_graph_edge_accum, _edge_accum, GrB_UINT64, GrB_UINT64, GrB_UINT64);
-		assert(info == GrB_SUCCESS);
-	}
-
 	return g;
 }
 
@@ -544,10 +515,30 @@ void Graph_CreateNode(Graph *g, int label, Node *n) {
 	}
 }
 
+static void add_relation_id (EdgeID* z_out, EdgeID x_in, EdgeID y_newid)
+{
+	EdgeID *ids;
+	/* Single edge ID,
+	 * switching from single edge ID to multiple IDs. */
+	if(SINGLE_EDGE(x_in)) {
+		ids = array_new(EdgeID, 2);
+		ids = array_append(ids, SINGLE_EDGE_ID(x_in));
+		ids = array_append(ids, SINGLE_EDGE_ID(y_newid));
+		// TODO: Make sure MSB of ids isn't on.
+		*z_out = (EdgeID)ids;
+	} else {
+		// Multiple edges, adding another edge.
+		ids = (EdgeID *)(x_in);
+		ids = array_append(ids, SINGLE_EDGE_ID(y_newid));
+		*z_out = (EdgeID)ids;
+	}
+}
+
 void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int r) {
 	GrB_Matrix adj = Graph_GetAdjacencyMatrix(g);
 	GrB_Matrix tadj = Graph_GetTransposedAdjacencyMatrix(g);
 	GrB_Matrix relationMat = Graph_GetRelationMatrix(g, r);
+        GrB_Info info;
 
 	// Rows represent source nodes, columns represent destination nodes.
 	GrB_Matrix_setElement_BOOL(adj, true, src, dest);
@@ -555,37 +546,24 @@ void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int
 	GrB_Index I = src;
 	GrB_Index J = dest;
 	edge_id = SET_MSB(edge_id);
-	GrB_Info info = GxB_Matrix_subassign_UINT64   // C(I,J)<Mask> = accum (C(I,J),x)
-					(
-						relationMat,         // input/output matrix for results
-						GrB_NULL,            // optional mask for C(I,J), unused if NULL
-						_graph_edge_accum,    // optional accum for Z=accum(C(I,J),x)
-						edge_id,             // scalar to assign to C(I,J)
-						&I,                  // row indices
-						1,                   // number of row indices
-						&J,                  // column indices
-						1,                   // number of column indices
-						GrB_NULL             // descriptor for C(I,J) and Mask
-					);
+
+        EdgeID relationMat_ij;
+        info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ij, relationMat, I, J);
+        assert (info == GrB_SUCCESS);
+        add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
+        info = GrB_Matrix_setElement_UINT64 (relationMat, (uint64_t)relationMat_ij, I, J);
 	assert(info == GrB_SUCCESS);
 
 	// Update the transposed matrix if one is present.
 	if(Config_MaintainTranspose()) {
 		// Perform the same update to the J,I coordinates of the transposed matrix.
 		GrB_Matrix t_relationMat = Graph_GetTransposedRelationMatrix(g, r);
-		GrB_Info info = GxB_Matrix_subassign_UINT64   // C(I,J)<Mask> = accum (C(I,J),x)
-						(
-							t_relationMat,       // input/output matrix for results
-							GrB_NULL,            // optional mask for C(J,I), unused if NULL
-							_graph_edge_accum,   // optional accum for Z=accum(C(J,I),x)
-							edge_id,             // scalar to assign to C(J,I)
-							&J,                  // row indices
-							1,                   // number of row indices
-							&I,                  // column indices
-							1,                   // number of column indices
-							GrB_NULL             // descriptor for C(J,I) and Mask
-						);
-		assert(info == GrB_SUCCESS);
+                EdgeID relationMat_ji;
+                info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ji, t_relationMat, J, I);
+                assert (info == GrB_SUCCESS);
+                add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
+                info = GrB_Matrix_setElement_UINT64 (t_relationMat, (uint64_t)relationMat_ji, J, I);
+                assert(info == GrB_SUCCESS);
 	}
 }
 
