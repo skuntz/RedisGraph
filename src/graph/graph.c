@@ -37,49 +37,6 @@ static GxB_SelectOp _select_delete_edges = NULL;
 void _MatrixResizeToCapacity(const Graph *g, RG_Matrix m);
 
 
-/* ========================= GraphBLAS functions ========================= */
-
-/* GxB_select_function which delete edges and free edge arrays. */
-bool _select_op_free_edge(GrB_Index i, GrB_Index j, GrB_Index nrows, GrB_Index ncols, const void *x,
-						  const void *thunk) {
-	// K is a uint64_t pointer which points to the address of our graph.
-	const Graph *g = (const Graph *) * ((uint64_t *)thunk);
-	const EdgeID *id = (const EdgeID *)x;
-	if((SINGLE_EDGE(*id))) {
-		DataBlock_DeleteItem(g->edges, SINGLE_EDGE_ID(*id));
-	} else {
-		/* Due to GraphBLAS V3.0+ parallelism
-		 * _select_op_free_edge will be called twice
-		 * Tim: "In my draft parallel GraphBLAS,
-		 * most of my codes take 2 passes over the data.
-		 * It's what Intel calls the Inspector / Executor model of computing.
-		 * Both passes are fully parallel.
-		 * The first pass is purely symbolic,
-		 * and it figures out where all the output data needs to go.
-		 * The 2nd pass fills in the data in the output."
-		 *
-		 * To avoid double freeing we'll place a marker on the first pass:
-		 * ids[0] = INVALID_ENTITY_ID
-		 * to be picked up by the second pass, on which the array will be freed. */
-		EdgeID *ids = (EdgeID *)(*id);
-
-		// Check for first pass marker.
-		if(ids[0] != INVALID_ENTITY_ID) {
-			uint id_count = array_len(ids);
-			for(uint i = 0; i < id_count; i++) {
-				DataBlock_DeleteItem(g->edges, ids[i]);
-			}
-			// Place first pass marker for second pass to pick up on.
-			ids[0] = INVALID_ENTITY_ID;
-		} else {
-			// Second pass, simply free the array.
-			array_free(ids);
-		}
-	}
-
-	return false;
-}
-
 /* ========================= RG_Matrix functions =============================== */
 
 // Creates a new matrix;
