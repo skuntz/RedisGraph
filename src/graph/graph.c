@@ -6,6 +6,16 @@
 
 #include <assert.h>
 
+#if defined(_OPENMP)
+#include <omp.h>
+#define OMP(x) OMP_(x)
+#define OMP_(x) _Pragma(x)
+#else
+#define OMP(x)
+static inline int omp_get_num_threads (void) { return 1; }
+static inline int omp_get_thread_num (void) { return 0; }
+#endif
+
 #include "graph.h"
 #include "../config.h"
 #include "../util/arr.h"
