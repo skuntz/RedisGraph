@@ -761,11 +761,9 @@ static void free_edge (Graph *g, EdgeID id)
      }
 }
 
-static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_Index *nvals_alloc_ptr, GrB_Index **Iptr, GrB_Index **Jptr, EdgeID **valptr)
+static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_Index *nvals_alloc_ptr, EdgeID **valptr)
 {
         GrB_Index nvals_alloc = *nvals_alloc_ptr;
-        // Note: I and J entries are never used, so the routine works with extracted submatrices.
-        GrB_Index *I = *Iptr, *J = *Jptr;
         EdgeID *val = *valptr;
 
         GrB_Index nvals, nvals_saved;
@@ -774,13 +772,6 @@ static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_
         info = GrB_Matrix_nvals (&nvals, grb_matrix);
         INFO_SUCCESS(info);
         if (nvals > nvals_alloc) {
-             GrB_Index *tmp;
-             tmp = realloc (I, nvals * sizeof (*I));
-             assert(tmp);
-             I = tmp;
-             tmp = realloc (J, nvals * sizeof (*J));
-             assert(tmp);
-             J = tmp;
              EdgeID *tmp_e;
              tmp_e = realloc (val, nvals * sizeof (*val));
              assert(tmp_e);
@@ -791,7 +782,7 @@ static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_
         nvals_saved = nvals;
 #endif
 
-        info = GrB_Matrix_extractTuples (I, J, (uintptr_t*)val, &nvals, grb_matrix);
+        info = GrB_Matrix_extractTuples (GrB_NULL, GrB_NULL, (uintptr_t*)val, &nvals, grb_matrix);
         INFO_SUCCESS(info);
 #if !defined(NDEBUG)
         assert (nvals == nvals_saved);
@@ -805,13 +796,12 @@ static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_
 static void _Graph_FreeRelationMatrices(Graph *g) {
 	uint relationCount = Graph_RelationTypeCount(g);
         GrB_Index nvals_alloc = 0;
-        GrB_Index *I = NULL, *J = NULL;
         EdgeID *val = NULL;
 	for(uint i = 0; i < relationCount; i++) {
 		RG_Matrix M = g->relations[i];
 
                 GrB_Matrix grb_matrix = M->grb_matrix;
-                _Graph_FreeRelationMatrixEdges (g, grb_matrix, &nvals_alloc, &I, &J, &val);
+                _Graph_FreeRelationMatrixEdges (g, grb_matrix, &nvals_alloc, &val);
 
 		// Free the matrix itself.
 		RG_Matrix_Free(M);
@@ -821,15 +811,13 @@ static void _Graph_FreeRelationMatrices(Graph *g) {
 			RG_Matrix TM = g->t_relations[i];
 
                         grb_matrix = TM->grb_matrix;
-                        _Graph_FreeRelationMatrixEdges (g, grb_matrix, &nvals_alloc, &I, &J, &val);
+                        _Graph_FreeRelationMatrixEdges (g, grb_matrix, &nvals_alloc, &val);
 
 			// Free the matrix itself.
 			RG_Matrix_Free(TM);
 		}
 	}
         free (val);
-        free (J);
-        free (I);
 }
 
 static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
@@ -894,7 +882,6 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
 
 	// Free and remove implicit edges from relation matrices.
         GrB_Index nvals_alloc = 0;
-        GrB_Index *I = NULL, *J = NULL;
         EdgeID *val = NULL;
 	const int relation_count = Graph_RelationTypeCount(g);
         const bool update_transpose = Config_MaintainTranspose();
@@ -909,14 +896,14 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                 info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, GrB_ALL, dim, node_idx, node_count,
                                     GrB_NULL);
                 INFO_SUCCESS(info);
-                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &I, &J, &val);
+                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
 
                 if (update_transpose) {
                      info = GrB_extract (tmp, GrB_NULL, GrB_NULL, Rt, GrB_ALL, dim, node_idx, node_count,
                                          GrB_NULL);
                      INFO_SUCCESS(info);
                      // XXX: Apparently the transpose may hold different edge IDs?
-                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &I, &J, &val);
+                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
                 }
 
                 GrB_Matrix_clear (tmp);
@@ -935,13 +922,13 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                                     GrB_NULL);
                 INFO_SUCCESS(info);
 
-                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &I, &J, &val);
+                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
                 if (update_transpose) {
                      info = GrB_extract (tmp, GrB_NULL, GrB_NULL, Rt, GrB_ALL, dim, node_idx, node_count,
                                          GrB_NULL);
                      INFO_SUCCESS(info);
                      // XXX: Apparently the transpose may hold different edge IDs?
-                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &I, &J, &val);
+                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
                 }
 
                 GrB_Matrix_clear (tmp);
@@ -972,6 +959,7 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
 	}
 
 	// Clean up.
+        free (val);
 	GrB_free (&tmp);
 }
 
