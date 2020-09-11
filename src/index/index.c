@@ -6,6 +6,12 @@
 #include "../graph/graphcontext.h"
 #include "../graph/entities/node.h"
 
+#if !defined(NDEBUG)
+#define INFO_SUCCESS(info) do { assert(info == GrB_SUCCESS); } while (0)
+#else
+#define INFO_SUCCESS(info)
+#endif
+
 static int _getNodeAttribute(void *ctx, const char *fieldName, const void *id, char **strVal,
 							 double *doubleVal) {
 	Node n = GE_NEW_NODE();
@@ -43,20 +49,39 @@ static void _populateIndex(Index *idx) {
 	NodeID node_id;
 	Graph *g = gc->g;
 	int label_id = s->id;
-	GxB_MatrixTupleIter *it;
 	const GrB_Matrix label_matrix = Graph_GetLabelMatrix(g, label_id);
-	GxB_MatrixTupleIter_new(&it, label_matrix);
 
-	// Iterate over each labeled node.
-	while(true) {
-		bool depleted = false;
-		GxB_MatrixTupleIter_next(it, NULL, &node_id, &depleted);
-		if(depleted) break;
 
-		Graph_GetNode(g, node_id, &node);
-		Index_IndexNode(idx, &node);
-	}
-	GxB_MatrixTupleIter_free(it);
+        /*
+          Ok.  The label matrix is diagonal.  There is no diag(X)
+          operation.  So be a tad painful.
+         */
+
+        GrB_Index *I;
+        GrB_Index dim;
+        GrB_Info info;
+
+        info = GrB_Matrix_nrows(&dim, label_matrix);
+        INFO_SUCCESS(info);
+#if !defined(NDEBUG)
+        GrB_Index dim2;
+        GrB_Matrix_ncols(&dim2, label_matrix);
+        assert (dim == dim2);
+        GrB_Index dim_saved = dim;
+#endif
+
+        I = malloc (dim * sizeof(*I));
+
+        info = GrB_Matrix_extractTuples (I, GrB_NULL, GrB_NULL, &dim, label_matrix);
+        INFO_SUCCESS(info);
+        assert (dim <= dim_saved);
+
+        for (GrB_Index k = 0; k < dim; ++k) {
+             Graph_GetNode (g, I[k], &node);
+             Index_IndexNode (idx, &node);
+        }
+
+        free (I);
 }
 
 // Create a new index.
