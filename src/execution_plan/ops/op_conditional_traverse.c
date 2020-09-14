@@ -57,7 +57,7 @@ void _traverse(CondTraverse *op) {
 	// Evaluate expression.
 	AlgebraicExpression_Eval(op->ae, op->M);
 
-	if(op->iter == NULL) GxB_MatrixTupleIter_new(&op->iter, op->M);
+	if(op->iter == NULL) GxB_MatrixTupleIter_new(op->iter, op->M);
 	else GxB_MatrixTupleIter_reuse(op->iter, op->M);
 
 	// Clear filter matrix.
