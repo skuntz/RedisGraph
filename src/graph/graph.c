@@ -516,15 +516,17 @@ void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int
 	// Rows represent source nodes, columns represent destination nodes.
 	GrB_Matrix_setElement_BOOL(adj, true, src, dest);
 	GrB_Matrix_setElement_BOOL(tadj, true, dest, src);
-	GrB_Index I = src;
-	GrB_Index J = dest;
 	edge_id = SET_MSB(edge_id);
 
         EdgeID relationMat_ij;
-        info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ij, relationMat, I, J);
-        INFO_SUCCESS(info);
-        add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
-        info = GrB_Matrix_setElement_UINT64 (relationMat, (uint64_t)relationMat_ij, I, J);
+        info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ij, relationMat, src, dest);
+        if (info == GrB_NO_VALUE) {
+             relationMat_ij = edge_id;
+        } else {
+             INFO_SUCCESS(info);
+             add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
+        }
+        info = GrB_Matrix_setElement_UINT64 (relationMat, (uint64_t)relationMat_ij, src, dest);
 	INFO_SUCCESS(info);
 
 	// Update the transposed matrix if one is present.
@@ -532,10 +534,14 @@ void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int
 		// Perform the same update to the J,I coordinates of the transposed matrix.
 		GrB_Matrix t_relationMat = Graph_GetTransposedRelationMatrix(g, r);
                 EdgeID relationMat_ji;
-                info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ji, t_relationMat, J, I);
-                INFO_SUCCESS(info);
-                add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
-                info = GrB_Matrix_setElement_UINT64 (t_relationMat, (uint64_t)relationMat_ji, J, I);
+                info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ji, t_relationMat, dest, src);
+                if (info == GrB_NO_VALUE) {
+                     relationMat_ij = edge_id;
+                } else {
+                     INFO_SUCCESS(info);
+                     add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
+                }
+                info = GrB_Matrix_setElement_UINT64 (t_relationMat, (uint64_t)relationMat_ji, dest, src);
                 INFO_SUCCESS(info);
 	}
 }
