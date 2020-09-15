@@ -25,7 +25,7 @@ static inline int omp_get_thread_num (void) { return 0; }
 #include "../util/datablock/oo_datablock.h"
 
 #if !defined(NDEBUG)
-#define INFO_SUCCESS(info) do { assert(info == GrB_SUCCESS); } while (0)
+#define INFO_SUCCESS(info) do { if (info != GrB_SUCCESS) fprintf (stderr, "%s:%d: info: %d error %s\n", __FILE__, __LINE__, (int)info, GrB_error ()); assert(info == GrB_SUCCESS); } while (0)
 #else
 #define INFO_SUCCESS(info)
 #endif
