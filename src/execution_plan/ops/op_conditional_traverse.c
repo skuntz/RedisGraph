@@ -57,7 +57,7 @@ void _traverse(CondTraverse *op) {
 	// Evaluate expression.
 	AlgebraicExpression_Eval(op->ae, op->M);
 
-	if(op->iter == NULL) GxB_MatrixTupleIter_new(op->iter, op->M);
+	if(op->iter == NULL) GxB_MatrixTupleIter_new(&op->iter, op->M);
 	else GxB_MatrixTupleIter_reuse(op->iter, op->M);
 
 	// Clear filter matrix.
@@ -194,7 +194,7 @@ static OpResult CondTraverseReset(OpBase *ctx) {
 	if(op->edge_ctx) Traverse_ResetEdgeCtx(op->edge_ctx);
 
 	if(op->iter) {
-		GxB_MatrixTupleIter_free(op->iter);
+		GxB_MatrixTupleIter_free(&op->iter);
 		op->iter = NULL;
 	}
 	if(op->F != GrB_NULL) GrB_Matrix_clear(op->F);
@@ -211,7 +211,7 @@ static inline OpBase *CondTraverseClone(const ExecutionPlan *plan, const OpBase 
 static void CondTraverseFree(OpBase *ctx) {
 	CondTraverse *op = (CondTraverse *)ctx;
 	if(op->iter) {
-		GxB_MatrixTupleIter_free(op->iter);
+		GxB_MatrixTupleIter_free(&op->iter);
 		op->iter = NULL;
 	}
 

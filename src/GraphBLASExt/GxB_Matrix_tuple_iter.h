@@ -2,9 +2,7 @@
 // GxB_MatrixTupleIter:  Iterates over all none zero values of a matrix
 //------------------------------------------------------------------------------
 
-#if !defined(GxBr_NOT_OPAQUE)
-typedef void* GxB_MatrixTupleIter;
-#endif
+typedef struct GBr_MatrixTupleIter_opaque* GxB_MatrixTupleIter;
 
 // Create a new matrix iterator
 GrB_Info GxB_MatrixTupleIter_new
