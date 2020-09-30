@@ -14,16 +14,6 @@
 // Not great, but handy.
 #define IDX_ALL ((uint64_t)-1)
 
-#define SUBSYSTEM "iter: "
-
-// XXX: Apparently _Generic and __VA_ARGS__ do not play well together.
-#if 1
-#define ASSERT_ON_FAILURE(cond, str, errcode, ...) ASSERT_ON_FAILURE_(cond, __FILE__ ":" SUBSYSTEM str, errcode, do { __VA_ARGS__; } while (0))
-#define ASSERT_ON_FAILURE_(cond, str, errcode, ...) do {bool augh = (cond); if (!augh) assert(NULL == str);  do { __VA_ARGS__; } while (0); return errcode; } while (0)
-#else
-#define ASSERT_ON_FAILURE(...)
-#endif
-
 struct GBr_MatrixTupleIter_opaque {
      GrB_Matrix A;
      GrB_Index nr, nc;
@@ -48,13 +38,15 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
      GrB_Index current_col, col_nv = 0;
      GrB_Vector col;
 
-     ASSERT_ON_FAILURE(NULL != iter, "null iterator input", GrB_NULL_POINTER);
+     assert(NULL != iter);
 
      current_col = iter->current_col;
      const GrB_Index end_col = iter->end_col;
      if (end_col == current_col) {
-          ASSERT_ON_FAILURE(iter->k == iter->col_pattern_len, "forwarding on non-empty column", 
-                            GrB_INDEX_OUT_OF_BOUNDS);
+          if (iter->k != iter->col_pattern_storage_len) {
+               assert(iter->k == iter->col_pattern_len);
+               return GrB_INDEX_OUT_OF_BOUNDS;
+          }
           return GrB_SUCCESS;
      }
 
@@ -63,21 +55,18 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
      const GrB_Index nc = iter->nc;
 
      info = GrB_Vector_new (&col, GrB_UINT64, nr);
-     ASSERT_ON_FAILURE(info == GrB_SUCCESS, "new vector failed", info);
+     assert (GrB_SUCCESS == info);
 
      // Find the next non-empty column.
-     if (NULL == iter->col_pattern) { // Just beginning.
-          assert (current_col == iter->begin_col);
-          goto load_col;
-     }
-     do {
-          ++current_col;
-     load_col:
-          info = GrB_extract (col, GrB_NULL, GrB_NULL, A, GrB_ALL, nr, current_col, GrB_NULL);
-          ASSERT_ON_FAILURE(info == GrB_SUCCESS, "failed to extract vector", info, GrB_free (&col));
+     for (; current_col < end_col; ++current_col) {
+          info = GrB_extract (col, GrB_NULL, GrB_NULL, A, GrB_ALL, nr, current_col, GrB_DESC_T0);//GrB_NULL);
+          assert (info == GrB_SUCCESS);
           info = GrB_Vector_nvals (&col_nv, col);
-          ASSERT_ON_FAILURE(info == GrB_SUCCESS, "failed to extract vector nvals", info, GrB_free (&col));
-     } while (current_col < end_col && col_nv == 0);
+          assert (info == GrB_SUCCESS);
+          if (col_nv) break;
+     }
+
+     iter->current_col = current_col;
 
      if (current_col == end_col) {
           // No more entries.
@@ -90,8 +79,7 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
           GrB_Index * new_col_pattern_storage;
           new_col_pattern_storage = realloc (iter->col_pattern_storage, 
                                              col_nv * sizeof (*iter->col_pattern_storage));
-          ASSERT_ON_FAILURE(NULL != new_col_pattern_storage, 
-                            "could not realloc col pattern storage", GrB_OUT_OF_MEMORY, GrB_free (&col));
+          assert(NULL != new_col_pattern_storage);
           iter->col_pattern_storage = new_col_pattern_storage;
           iter->col_pattern_storage_len = col_nv;
      }
@@ -100,9 +88,9 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
 
      // Finally.  Extract the pattern.
      GrB_Index returned_nv = col_nv;
-     info = GrB_Vector_extractTuples (GrB_NULL, iter->col_pattern, &returned_nv, col);
-     ASSERT_ON_FAILURE(info == GrB_SUCCESS, "failed to extract vector pattern", info, GrB_free (&col));
-     ASSERT_ON_FAILURE(returned_nv == col_nv, "vector nvals changed during execution", GrB_PANIC, GrB_free (&col));
+     info = GrB_Vector_extractTuples (iter->col_pattern, (bool*)GrB_NULL, &returned_nv, col);
+     assert (GrB_SUCCESS == info);
+     assert (returned_nv == col_nv);
 
      iter->k = 0;
      GrB_free (&col);
@@ -112,7 +100,7 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
 GrB_Info
 iter_step (struct GBr_MatrixTupleIter_opaque* iter)
 {
-     ASSERT_ON_FAILURE(NULL != iter, "null iterator input", GrB_NULL_POINTER);
+     assert (NULL != iter);
 
      // Move forward within the column
      ++iter->k;
@@ -139,11 +127,12 @@ iter_reuse (struct GBr_MatrixTupleIter_opaque* iter, GrB_Matrix A, GrB_Index beg
      iter->col_pattern_len = 0;
      iter->A = A;
      GrB_Info info = GrB_Matrix_ncols (&iter->nc, iter->A);
-     ASSERT_ON_FAILURE(info == GrB_SUCCESS, "ncols failed", info);
+     assert (GrB_SUCCESS == info);
      info = GrB_Matrix_nrows (&iter->nr, iter->A);
-     ASSERT_ON_FAILURE(info == GrB_SUCCESS, "nrows failed", info);
-     ASSERT_ON_FAILURE(begin_col <= iter->nc, "starting iterator past the end", GrB_INVALID_INDEX);
-     ASSERT_ON_FAILURE(end_col <= iter->nc || end_col == IDX_ALL, "ending the iterator past the end", GrB_INVALID_INDEX);
+     assert (iter->nr > 0);
+     assert (GrB_SUCCESS == info);
+     assert (begin_col <= iter->nc);
+     assert (end_col <= iter->nc || end_col == IDX_ALL);
      iter->begin_col = begin_col;
      if (end_col == IDX_ALL)
           iter->end_col = iter->nc;
@@ -158,7 +147,7 @@ iter_reuse (struct GBr_MatrixTupleIter_opaque* iter, GrB_Matrix A, GrB_Index beg
 GrB_Info
 iter_init (struct GBr_MatrixTupleIter_opaque* iter, GrB_Matrix A, GrB_Index begin_col, GrB_Index end_col)
 {
-     //ASSERT_ON_FAILURE(NULL != iter, "null iterator input", GrB_NULL_POINTER);
+     assert (NULL != iter);
      GrB_Info info;
      memset (iter, 0, sizeof (*iter));
      info = iter_reuse (iter, A, begin_col, end_col);
@@ -168,9 +157,9 @@ iter_init (struct GBr_MatrixTupleIter_opaque* iter, GrB_Matrix A, GrB_Index begi
 GrB_Info
 iter_reset_range (struct GBr_MatrixTupleIter_opaque* iter, GrB_Index begin_col, GrB_Index end_col)
 {
-     ASSERT_ON_FAILURE(NULL != iter, "null iterator input", GrB_NULL_POINTER);
-     ASSERT_ON_FAILURE(begin_col < iter->nc, "starting iterator past the end", GrB_INVALID_INDEX);
-     ASSERT_ON_FAILURE(end_col <= iter->nc, "ending the iterator past the end", GrB_INVALID_INDEX);
+     assert (NULL != iter);
+     assert (begin_col < iter->nc);
+     assert (end_col <= iter->nc);
      iter->begin_col = begin_col;
      iter->current_col = begin_col;
      iter->end_col = end_col;
@@ -187,9 +176,9 @@ GxB_MatrixTupleIter_new (GxB_MatrixTupleIter *gxb_iter, GrB_Matrix A)
      if (gxb_iter == NULL) { return GrB_NULL_POINTER; }
      struct GBr_MatrixTupleIter_opaque *out;
      out = malloc (sizeof (*out));
-     //ASSERT_ON_FAILURE(out != NULL, "failed to allocate iterator", GrB_OUT_OF_MEMORY);
+     assert (NULL != out);
      GrB_Info info = iter_init (out, A, 0, IDX_ALL);
-     //ASSERT_ON_FAILURE(info == GrB_SUCCESS, "failed to initialize iterator", GrB_INVALID_OBJECT, free(out); *gxb_iter=NULL);
+     assert (GrB_SUCCESS == info);
      assert (out != NULL);
      *gxb_iter = out;
      assert (*gxb_iter != NULL);
@@ -212,8 +201,8 @@ GrB_Info
 MatrixTupleIter_reset_ (GxB_MatrixTupleIter iter,
                         GrB_Index startColIdx, GrB_Index endColIdx)
 {
+     assert (NULL != iter);
      GrB_Info info;
-     ASSERT_ON_FAILURE(NULL != iter, "NULL iterator", GrB_NULL_POINTER);
 
      endColIdx += 1; // oy.
      return iter_reset_range (iter, startColIdx, endColIdx);
@@ -223,7 +212,7 @@ GrB_Info
 GxB_MatrixTupleIter_iterate_range (GxB_MatrixTupleIter iter, 
                                    GrB_Index startColIdx, GrB_Index endColIdx)
 {
-     ASSERT_ON_FAILURE(NULL != iter, "NULL iterator", GrB_NULL_POINTER);
+     assert (NULL != iter);
      return MatrixTupleIter_reset_ (iter, startColIdx, endColIdx);
 }
 
@@ -235,14 +224,14 @@ GrB_Info GxB_MatrixTupleIter_next
 	GrB_Index *col,                 // optional output column index
 	bool *depleted                  // indicate if iterator depleted
 ) {
-     ASSERT_ON_FAILURE(NULL != iter, "NULL iterator", GrB_NULL_POINTER);
+     assert (NULL != iter);
      struct GBr_MatrixTupleIter_opaque *it = iter;
      if (iter_finishedp (iter)) { if (depleted) *depleted = true; return GrB_SUCCESS; }
 
      if (col) *col = it->current_col;
      assert(it->k < it->col_pattern_len);
      if (row) *row = it->col_pattern[it->k];
-     return iter_forward_col (iter);
+     return iter_step (iter);
 }
 
 // Reset iterator
@@ -259,7 +248,7 @@ GrB_Info GxB_MatrixTupleIter_reuse
 	GxB_MatrixTupleIter iter,      // iterator to update
 	GrB_Matrix A                    // matrix to scan
 ) {
-     ASSERT_ON_FAILURE(NULL != iter, "NULL iterator", GrB_NULL_POINTER);
+     assert (NULL != iter);
      return iter_reuse (iter, A, 0, IDX_ALL);
 }
 
