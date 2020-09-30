@@ -54,12 +54,13 @@ iter_forward_col (struct GBr_MatrixTupleIter_opaque* iter)
      const GrB_Index nr = iter->nr;
      const GrB_Index nc = iter->nc;
 
-     info = GrB_Vector_new (&col, GrB_UINT64, nr);
+     info = GrB_Vector_new (&col, GrB_UINT64, nc);//nr);
      assert (GrB_SUCCESS == info);
 
      // Find the next non-empty column.
      for (; current_col < end_col; ++current_col) {
           info = GrB_extract (col, GrB_NULL, GrB_NULL, A, GrB_ALL, nr, current_col, GrB_DESC_T0);//GrB_NULL);
+          if (info != GrB_SUCCESS) fprintf (stderr, "augh %d: %s\n", (int)info, GrB_error());
           assert (info == GrB_SUCCESS);
           info = GrB_Vector_nvals (&col_nv, col);
           assert (info == GrB_SUCCESS);
