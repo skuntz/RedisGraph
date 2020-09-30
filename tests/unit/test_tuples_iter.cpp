@@ -59,6 +59,7 @@ class TuplesTest: public ::testing::Test {
 	}
 };
 
+#if 0 // Buggy: Assumes vectors and matrices can be typecast.
 TEST_F(TuplesTest, RandomVectorTest) {
 	//--------------------------------------------------------------------------
 	// Build a random vector
@@ -91,7 +92,8 @@ TEST_F(TuplesTest, RandomVectorTest) {
 	//--------------------------------------------------------------------------
 
 	GxB_MatrixTupleIter iter;
-	GxB_MatrixTupleIter_new(&iter, (GrB_Matrix)A);
+        /* XXX: Assumes they use the same structure. */ GxB_MatrixTupleIter_new(&iter, (GrB_Matrix)A);
+        ASSERT_FALSE(iter == NULL);
 	GrB_Index col;
 
 	//--------------------------------------------------------------------------
@@ -136,7 +138,7 @@ TEST_F(TuplesTest, VectorIteratorTest) {
 	//--------------------------------------------------------------------------
 
 	GxB_MatrixTupleIter iter;
-	GxB_MatrixTupleIter_new(&iter, (GrB_Matrix)A);
+	/* XXX: Assumes they use the same structure. */ GxB_MatrixTupleIter_new(&iter, (GrB_Matrix)A);
 	GrB_Index col;
 
 	//--------------------------------------------------------------------------
@@ -170,6 +172,7 @@ TEST_F(TuplesTest, VectorIteratorTest) {
 	GxB_MatrixTupleIter_free(&iter);
 	GrB_Vector_free(&A);
 }
+#endif // Buggy
 
 TEST_F(TuplesTest, RandomMatrixTest) {
 	//--------------------------------------------------------------------------
