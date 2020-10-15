@@ -493,18 +493,22 @@ static void add_relation_id (EdgeID* z_out, EdgeID x_in, EdgeID y_newid)
 	EdgeID *ids;
 	/* Single edge ID,
 	 * switching from single edge ID to multiple IDs. */
+    printf("    add_relation_id: add edgeID 0x%x\n", y_newid ); fflush(stdout);
 	if(SINGLE_EDGE(x_in)) {
+        printf("        add_relation_id: before: single edge\n", z_out, array_len(z_out)); fflush(stdout);
 		ids = array_new(EdgeID, 2);
 		ids = array_append(ids, SINGLE_EDGE_ID(x_in));
 		ids = array_append(ids, SINGLE_EDGE_ID(y_newid));
 		// TODO: Make sure MSB of ids isn't on.
 		*z_out = (EdgeID)ids;
 	} else {
+        printf("        add_relation_id: before: edgeID %p (%ld), count %ld\n", x_in, (long) x_in, array_len(x_in)); fflush(stdout);
 		// Multiple edges, adding another edge.
 		ids = (EdgeID *)(x_in);
 		ids = array_append(ids, SINGLE_EDGE_ID(y_newid));
 		*z_out = (EdgeID)ids;
 	}
+    printf("        add_relation_id: after: add edgeID %p (%ld), count %ld\n", *z_out, (long) *z_out, array_len(*z_out)); fflush(stdout);
 }
 
 void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int r) {
@@ -512,6 +516,9 @@ void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int
 	GrB_Matrix tadj = Graph_GetTransposedAdjacencyMatrix(g);
 	GrB_Matrix relationMat = Graph_GetRelationMatrix(g, r);
         GrB_Info info;
+
+        printf("FORM CONNECTION: src %ld, dest %ld, edge id %ld, r %u\n",
+                src, dest, edge_id, r); fflush(stdout);
 
 	// Rows represent source nodes, columns represent destination nodes.
 	GrB_Matrix_setElement_BOOL(adj, true, src, dest);
@@ -521,28 +528,34 @@ void Graph_FormConnection(Graph *g, NodeID src, NodeID dest, EdgeID edge_id, int
         EdgeID relationMat_ij;
         info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ij, relationMat, src, dest);
         if (info == GrB_NO_VALUE) {
+            printf("  Add new edge_id %p (%lu)", edge_id, (long) edge_id); fflush(stdout);
              relationMat_ij = edge_id;
         } else {
              INFO_SUCCESS(info);
              add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
         }
         info = GrB_Matrix_setElement_UINT64 (relationMat, (uint64_t)relationMat_ij, src, dest);
+    GxB_Matrix_fprint(relationMat, "relationMat", (GxB_Print_Level) 3, stdout); fflush(stdout);
 	INFO_SUCCESS(info);
 
 	// Update the transposed matrix if one is present.
 	if(Config_MaintainTranspose()) {
+
 		// Perform the same update to the J,I coordinates of the transposed matrix.
 		GrB_Matrix t_relationMat = Graph_GetTransposedRelationMatrix(g, r);
                 EdgeID relationMat_ji;
                 info = GrB_Matrix_extractElement_UINT64 ((uint64_t*)&relationMat_ji, t_relationMat, dest, src);
                 if (info == GrB_NO_VALUE) {
-                     relationMat_ij = edge_id;
+                    printf("  TRANSPOSE: add new edge_id %p (%lu)",
+                            edge_id, (long) edge_id); fflush(stdout);
+                     relationMat_ji = edge_id;
                 } else {
                      INFO_SUCCESS(info);
-                     add_relation_id (&relationMat_ij, relationMat_ij, edge_id);
+                     add_relation_id (&relationMat_ji, relationMat_ji, edge_id);
                 }
                 info = GrB_Matrix_setElement_UINT64 (t_relationMat, (uint64_t)relationMat_ji, dest, src);
                 INFO_SUCCESS(info);
+        GxB_Matrix_fprint(t_relationMat, "t_relationMat", (GxB_Print_Level) 3, stdout); fflush(stdout);
 	}
 }
 
@@ -756,15 +769,28 @@ void Graph_DeleteNode(Graph *g, Node *n) {
 static void free_edge (Graph *g, EdgeID id)
 {
      if (SINGLE_EDGE(id)) {
+         printf("    free_edge: free single edge %ld\n", SINGLE_EDGE_ID(id)); fflush(stdout);
           DataBlock_DeleteItem (g->edges, SINGLE_EDGE_ID(id));
      } else {
-          EdgeID *ids = (EdgeID *)id;
-          uint id_count = array_len(ids);
-          for(uint i = 0; i < id_count; i++) {
-               DataBlock_DeleteItem (g->edges, ids[i]);
-          }
-          array_free(ids);
+
+         EdgeID *ids = (EdgeID *) id;
+         if (*ids == NULL)
+             return;
+         uint id_count = array_len(ids);
+         printf("    free_edge: free multi edge %p, nedges 0x%x\n", ids, id_count);
+         fflush(stdout);
+         for (uint i = 0; i < id_count; i++) {
+             DataBlock_DeleteItem(g->edges, ids[i]);
+         }
+         if (id_count > 0) {
+             array_free(ids);
+             *ids = NULL;
+         } else {
+             *ids = NULL;
+         }
+         printf("    free_edge: After free: ids %p, *ids %p\n", ids, *ids); fflush(stdout);
      }
+     //
 }
 
 static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_Index *nvals_alloc_ptr, EdgeID **valptr)
@@ -777,25 +803,41 @@ static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_
 
         info = GrB_Matrix_nvals (&nvals, grb_matrix);
         INFO_SUCCESS(info);
+
+        if (nvals == 0) {
+            printf("   nvals == 0, empty relationship matrix\n"); fflush(stdout);
+            return;
+        }
+
+    GxB_Matrix_fprint(grb_matrix, "grb_matrix", (GxB_Print_Level) 3, stdout);
+    // why are we allocating new edges?
+        printf(" Nvals alloc %ld, nvals %ld\n", nvals_alloc, nvals); fflush(stdout);
         if (nvals > nvals_alloc) {
              EdgeID *tmp_e;
              tmp_e = realloc (val, nvals * sizeof (*val));
              assert(tmp_e);
              val = tmp_e;
         }
+        printf("  After if nvals > nvals_alloc\n"); fflush(stdout);
 
 #if !defined(NDEBUG)
         nvals_saved = nvals;
 #endif
 
+        // Extract tuples into val from grb_matrix
         info = GrB_Matrix_extractTuples (GrB_NULL, GrB_NULL, (uintptr_t*)val, &nvals, grb_matrix);
         INFO_SUCCESS(info);
 #if !defined(NDEBUG)
         assert (nvals == nvals_saved);
 #endif
 
-        OMP(omp parallel for)
-             for (GrB_Index k = 0; k < nvals; ++k)
+    for (GrB_Index k = 0; k < nvals; ++k) {
+        printf("val[%ld] %p\n", k, val[k]); fflush(stdout);
+    }
+
+        //OMP(omp parallel for)
+        // Issue appears to be here. Why?
+    for (GrB_Index k = 0; k < nvals; ++k)
                   free_edge (g, val[k]);
 }
 
@@ -833,123 +875,198 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
 	/* Create a matrix M where M[j,i] = 1 where:
 	 * Node i is connected to node j. */
 
-        GrB_Info info;
-        /* XXX: Need to count number of edges deleted for some reason */
-        uint64_t nedge_deleted, nedge_deleted_row;
-        GrB_Matrix tmp;
-        GrB_Index dim;
+    GrB_Info info;
+    /* XXX: Need to count number of edges deleted for some reason */
+    uint64_t nedge_deleted, nedge_deleted_row;
+    GrB_Matrix tmp;
+    GrB_Matrix tmp_transpose;
+    GrB_Index dim;
 
 	GrB_Matrix adj;                     // Adjacency matrix.
 	GrB_Matrix tadj;                    // Transposed adjacency matrix.
 
-        GrB_Index *node_idx = NULL;
+	//GrB_Index *node_idx = NULL;
+    GrB_Index *node_idx = (GrB_Index *) malloc(node_count * sizeof(GrB_Index));
 
 	adj = Graph_GetAdjacencyMatrix(g);
 	tadj = Graph_GetTransposedAdjacencyMatrix(g);
+#if 1
+    GrB_Index nrows;
+    GrB_Matrix_nrows(&nrows, adj);
+    GrB_Index ncols;
+    GrB_Matrix_ncols(&ncols, adj);
+    GrB_Index nvals;
+    GrB_Matrix_nvals(&nvals, adj);
 
-        dim = Graph_RequiredMatrixDim (g);
+    printf(" On entry: edge_deleted %d, node_deleted %d\n", *edge_deleted, *node_deleted); fflush(stdout);
+    for (long i=0; i<node_count; i++) {
+        printf(" nodes[%ld] = %p\n", i, nodes+i); fflush(stdout);
+    }
 
-        for(uint i = 0; i < node_count; i++)
-             node_idx[i] = ENTITY_GET_ID(nodes + i);
+    printf("  Initial values for adj and tadj\n");
+    GxB_Matrix_fprint(adj, "adj", (GxB_Print_Level) 3, stdout);
+    GxB_Matrix_fprint(tadj, "tadj", (GxB_Print_Level) 3, stdout);
+#endif
 
-        info = GrB_Matrix_new (&tmp, GrB_UINT64, dim, node_count);
-        INFO_SUCCESS(info);
-        info = GrB_extract (tmp, GrB_NULL, GrB_NULL, adj, GrB_ALL, dim, node_idx, node_count,
+    // Get the node ids
+    dim = Graph_RequiredMatrixDim (g);
+    printf("  adj mat: dim %ld, nrows %ld ncols %ld nvals %ld\n", dim, nrows, ncols, nvals); fflush(stdout);
+
+    for(uint i = 0; i < node_count; i++) {
+        //node_idx[i] = ENTITY_GET_ID(nodes + i);
+        node_idx[i] = ENTITY_GET_ID(&nodes[i]);
+        printf("  node_idx[%d] = %ld\n", i, node_idx[i]);
+    }
+
+    // Create tmp of size dim x node_count
+    info = GrB_Matrix_new (&tmp, GrB_UINT64, dim, node_count);
+    INFO_SUCCESS(info);
+
+    // Extract node_idx values from adj matrix into tmp
+    // tmp will hold the values that need to be deleted from adj matrix
+    // Note that it is based on I, J so tmp(0,3) means A(I(0), J(3)) = A(0, 1)
+    info = GrB_extract (tmp, GrB_NULL, GrB_NULL, adj, GrB_ALL, dim, node_idx, node_count,
                             GrB_NULL);
-        INFO_SUCCESS(info);
-        GrB_Matrix_nvals (&nedge_deleted, tmp);
+    INFO_SUCCESS(info);
+    GrB_Matrix_nvals (&nedge_deleted, tmp);
+    printf(" tmp nvals %ld\n", nedge_deleted);
+    GxB_Matrix_fprint(tmp, "tmp", (GxB_Print_Level) 3, stdout);
 
-        GrB_Matrix_clear (tmp);
-        info = GrB_assign (adj, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
+    // Create tmp transpose
+    info = GrB_Matrix_new (&tmp_transpose, GrB_UINT64, node_count, dim);
+    INFO_SUCCESS(info);
+    info = GrB_transpose(tmp_transpose, NULL, NULL, tmp, NULL);
+    INFO_SUCCESS(info);
+    GxB_Matrix_fprint(tmp_transpose, "tmp_transpose", (GxB_Print_Level) 3, stdout);
+
+    // Assign tmp back into adj so that these (now zero) values will be deleted
+    GrB_Matrix_clear (tmp); // Zero out the values
+    info = GrB_assign (adj, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
                            GrB_NULL);
-        INFO_SUCCESS(info);
-        info = GrB_assign (tadj, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
-                           GrB_NULL);
-        INFO_SUCCESS(info);
+    INFO_SUCCESS(info);
+    printf("  After assign tmp back into adj\n");
+    GxB_Matrix_fprint(adj, "adj", (GxB_Print_Level) 3, stdout);
 
-        info = GxB_Matrix_resize (tmp, node_count, dim);
-        INFO_SUCCESS(info);
-        info = GrB_extract (tmp, GrB_NULL, GrB_NULL, adj, GrB_ALL, dim, node_idx, node_count,
-                            GrB_NULL);
-        INFO_SUCCESS(info);
-        GrB_Matrix_nvals (&nedge_deleted_row, tmp);
-        nedge_deleted += nedge_deleted_row;
-        GrB_Matrix_clear (tmp);
+    // Assign tmp back into tadj so that these (now zero) values will be deleted
+    GrB_Matrix_clear (tmp_transpose); // Zero out the values
+    //info = GrB_assign (tadj, GrB_NULL, GrB_NULL, tmp_transpose, GrB_ALL, dim, node_idx, node_count,
+    info = GrB_assign (tadj, GrB_NULL, GrB_NULL, tmp_transpose, node_idx, node_count, GrB_ALL, dim,
+                       GrB_NULL);
+    INFO_SUCCESS(info);
+    printf("  Did tadj assign actually work?\n"); fflush(stdout);
+    GxB_Matrix_fprint(tadj, "tadj", (GxB_Print_Level) 3, stdout);
 
-        info = GrB_Matrix_assign (adj, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
-                                  GrB_NULL);
-        INFO_SUCCESS(info);
-        info = GrB_Matrix_assign (tadj, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
-                                  GrB_NULL);
-        INFO_SUCCESS(info);
 
+#if 0  // Rewrite the transpose update above
+    //info = GxB_Matrix_resize (tmp, dim, node_count);
+    //INFO_SUCCESS(info);
+    info = GrB_extract (tmp, GrB_NULL, GrB_NULL, adj, GrB_ALL, dim, node_idx, node_count,
+                        GrB_NULL);
+    INFO_SUCCESS(info);
+    GrB_Matrix_nvals (&nedge_deleted_row, tmp);
+    nedge_deleted += nedge_deleted_row;
+
+    GrB_Matrix_clear (tmp);
+    info = GrB_Matrix_assign (adj, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
+                              GrB_NULL);
+    INFO_SUCCESS(info);
+
+
+    info = GrB_Matrix_assign (tadj, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
+                              GrB_NULL);
+    INFO_SUCCESS(info);
+#endif
+
+    // FIXME: This computation isn't right. Should be 2 nodes and 4 edges deleted.
 	*node_deleted += node_count; // XXX: Um... What if it already was cleared?
 	*edge_deleted += nedge_deleted;
 
-	// Free and remove implicit edges from relation matrices.
-        GrB_Index nvals_alloc = 0;
-        EdgeID *val = NULL;
+	printf("  Before relationship matrices, edge_deleted %d, node deleted %d\n",
+	        *edge_deleted, *node_deleted); fflush(stdout);
+
+	//////////////////////////////////////////////////////////////////////
+    // Free and remove implicit edges from relation matrices.
+	GrB_Index nvals_alloc = 0;
+	EdgeID *val = NULL;
 	const int relation_count = Graph_RelationTypeCount(g);
-        const bool update_transpose = Config_MaintainTranspose();
+	const bool update_transpose = Config_MaintainTranspose();
 	for(int i = 0; i < relation_count; i++) {
+	    printf(" In loop for relation count: i %d\n", i); fflush(stdout);
 		GrB_Matrix R = Graph_GetRelationMatrix(g, i);
-                GrB_Matrix Rt = GrB_NULL;
-                if (update_transpose) Rt = Graph_GetTransposedRelationMatrix(g, i);
 
-                info = GxB_Matrix_resize (tmp, dim, node_count);
-                INFO_SUCCESS(info);
 
-                info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, GrB_ALL, dim, node_idx, node_count,
-                                    GrB_NULL);
-                INFO_SUCCESS(info);
-                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+        info = GxB_Matrix_resize (tmp, dim, node_count);
+        INFO_SUCCESS(info);
 
-                if (update_transpose) {
-                     info = GrB_extract (tmp, GrB_NULL, GrB_NULL, Rt, GrB_ALL, dim, node_idx, node_count,
-                                         GrB_NULL);
-                     INFO_SUCCESS(info);
-                     // XXX: Apparently the transpose may hold different edge IDs?
-                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
-                }
+        info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, GrB_ALL, dim, node_idx, node_count,
+                            GrB_NULL);
+        INFO_SUCCESS(info);
 
-                GrB_Matrix_clear (tmp);
-                info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
-                                   GrB_NULL);
-                INFO_SUCCESS(info);
-                if (update_transpose) {
-                     info = GrB_assign (Rt, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
-                                        GrB_NULL);
-                     INFO_SUCCESS(info);
-                }
+        printf("  Before Free Relation matrix edges\n"); fflush(stdout);
+        //_Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+        _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+        printf("  After Free Relation matrix edges\n"); fflush(stdout);
 
-                info = GxB_Matrix_resize (tmp, node_count, dim);
-                INFO_SUCCESS(info);
-                info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, node_idx, node_count, GrB_ALL, dim,
-                                    GrB_NULL);
-                INFO_SUCCESS(info);
+        GrB_Matrix Rt = GrB_NULL;
+        info = GxB_Matrix_resize (tmp_transpose, node_count, dim);
+        if (update_transpose) {
+            Rt = Graph_GetTransposedRelationMatrix(g, i);
+            // Issue here - I think tmp is NULL
+            info = GrB_extract (tmp_transpose, GrB_NULL, GrB_NULL, Rt, node_idx, node_count,
+                                 GrB_ALL, dim, GrB_NULL);
+            INFO_SUCCESS(info);
+            // XXX: Apparently the transpose may hold different edge IDs?
+            _Graph_FreeRelationMatrixEdges (g, tmp_transpose, &nvals_alloc, &val);
+        }
+        printf("  After update transpose\n"); fflush(stdout);
 
-                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
-                if (update_transpose) {
-                     info = GrB_extract (tmp, GrB_NULL, GrB_NULL, Rt, GrB_ALL, dim, node_idx, node_count,
-                                         GrB_NULL);
-                     INFO_SUCCESS(info);
-                     // XXX: Apparently the transpose may hold different edge IDs?
-                     _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
-                }
+        //// WTH is this stuff? We already free'd tmp
+        ////
+        GrB_Matrix_clear (tmp);
+        info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
+                           GrB_NULL);
+        INFO_SUCCESS(info);
+        if (update_transpose) {
+             info = GrB_assign (Rt, GrB_NULL, GrB_NULL, tmp_transpose, node_idx, node_count,
+                     GrB_ALL, dim, GrB_NULL);
+             INFO_SUCCESS(info);
+        }
 
-                GrB_Matrix_clear (tmp);
-                info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, node_idx, node_count,  GrB_ALL, dim,
-                                   GrB_NULL);
-                INFO_SUCCESS(info);
-                if (update_transpose) {
-                     info = GrB_assign (Rt, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
-                                        GrB_NULL);
-                     INFO_SUCCESS(info);
-                }
+        info = GxB_Matrix_resize (tmp, node_count, dim);
+        INFO_SUCCESS(info);
+        info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, node_idx, node_count,
+                GrB_ALL, dim, GrB_NULL);
+        INFO_SUCCESS(info);
+
+        _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+        if (update_transpose) {
+            info = GxB_Matrix_resize (tmp_transpose, dim, node_count);
+            INFO_SUCCESS(info);
+             info = GrB_extract (tmp_transpose, GrB_NULL, GrB_NULL, Rt,
+                                 GrB_ALL, dim, node_idx, node_count, GrB_NULL);
+             INFO_SUCCESS(info);
+             // XXX: Apparently the transpose may hold different edge IDs?
+             _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+        }
+        ////
+        printf(" After free edges 2\n"); fflush(stdout);
+
+        GrB_Matrix_clear (tmp);
+        info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, node_idx, node_count,  GrB_ALL, dim,
+                           GrB_NULL);
+        INFO_SUCCESS(info);
+        if (update_transpose) {
+             info = GrB_assign (Rt, GrB_NULL, GrB_NULL, tmp_transpose, GrB_ALL, dim, node_idx, node_count,
+                                GrB_NULL);
+             INFO_SUCCESS(info);
+        }
+        printf(" After assign 2\n"); fflush(stdout);
 	}
 
         info = GxB_Matrix_resize (tmp, node_count, node_count);
         INFO_SUCCESS(info);
+
+        printf(" Before delete nodes\n"); fflush(stdout);
 	/* Delete nodes
 	 * All nodes marked for deleteion are detected, no incoming / outgoing edges. */
 	int node_type_count = Graph_LabelTypeCount(g);
@@ -1106,6 +1223,10 @@ void Graph_BulkDelete(Graph *g, Node *nodes, uint node_count, Edge *edges, uint 
 	*edge_deleted = 0;
 	*node_deleted = 0;
 
+	for (long i=0; i<node_count; i++) {
+	    printf("nodes[%ld]: %p, id %ld\n", i, nodes+i, ENTITY_GET_ID(nodes+i)); fflush(stdout);
+	}
+
 	if(node_count) _BulkDeleteNodes(g, nodes, node_count, node_deleted, edge_deleted);
 
 	if(edge_count) {
@@ -1253,37 +1374,49 @@ void Graph_Free(Graph *g) {
 	RG_Matrix_Free(g->adjacency_matrix);
 	RG_Matrix_Free(g->_t_adjacency_matrix);
 
+    //printf("  Graph_Free: after Matrix Free\n"); fflush(stdout);
+
 	_Graph_FreeRelationMatrices(g);
+    //printf("  Graph_Free: after Free relation matrices\n"); fflush(stdout);
 	array_free(g->relations);
 	array_free(g->t_relations);
+    //printf("  Graph_Free: after array free\n"); fflush(stdout);
 
 	uint32_t labelCount = array_len(g->labels);
 	for(int i = 0; i < labelCount; i++) {
 		RG_Matrix_Free(g->labels[i]);
 	}
 	array_free(g->labels);
+    //printf("  Graph_Free: after Free labels\n"); fflush(stdout);
 
 	it = Graph_ScanNodes(g);
 	while((en = (Entity *)DataBlockIterator_Next(it, NULL)) != NULL)
 		FreeEntity(en);
+    //printf("  Graph_Free: after Free entity\n"); fflush(stdout);
 
 	DataBlockIterator_Free(it);
+    //printf("  Graph_Free: after datablockiterator free\n"); fflush(stdout);
 
 	it = Graph_ScanEdges(g);
 	while((en = DataBlockIterator_Next(it, NULL)) != NULL)
 		FreeEntity(en);
+    //printf("  Graph_Free: after datablockiterator next\n"); fflush(stdout);
 
 	DataBlockIterator_Free(it);
+    //printf("  Graph_Free: after datablockiterator free #2\n"); fflush(stdout);
 
 	// Free blocks.
 	DataBlock_Free(g->nodes);
 	DataBlock_Free(g->edges);
+    //printf("  Graph_Free: after free blocks\n"); fflush(stdout);
 
 	assert(pthread_mutex_destroy(&g->_writers_mutex) == 0);
 
 	if(g->_writelocked) Graph_ReleaseLock(g);
 	assert(pthread_rwlock_destroy(&g->_rwlock) == 0);
+    //printf("  Graph_Free: after rwlock destroy\n"); fflush(stdout);
 
 	rm_free(g);
+    //printf("  Graph_Free: after rm free\n"); fflush(stdout);
 }
 
