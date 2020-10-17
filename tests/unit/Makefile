@@ -11,7 +11,7 @@ LIBCYPHER-PARSER_DIR = ../../deps/libcypher-parser/lib/src
 # Flags passed to the preprocessor.
 # Set Google Test's header directory as a system directory, such that
 # the compiler doesn't generate warnings in Google Test headers.
-CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR)/include/gtest/
+CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR)/include/gtest/ $(GRAPHBLAS_CPPFLAGS)
 LDFLAGS += -ldl
 
 # Flags passed to the C++ compiler.
@@ -54,11 +54,14 @@ CC_OBJECTS:=$(CC_OBJECTS)
 RAX=../../deps/rax/rax.o
 LIBXXHASH=$(ROOT)/deps/xxHash/libxxhash.a
 REDISEARCH=../../deps/RediSearch/build/libredisearch.a
-LIBGRAPHBLAS=../../deps/GraphBLAS/build/libgraphblas.a
 LIBCYPHER-PARSER=../../deps/libcypher-parser/lib/src/.libs/libcypher-parser.a
 
-LIBS=$(LIBGRAPHBLAS) $(REDISEARCH) $(LIBXXHASH) $(LIBCYPHER-PARSER)
+LIBS=$(REDISEARCH) $(LIBXXHASH) $(LIBCYPHER-PARSER)
 DEPS=$(CC_OBJECTS) $(RAX) $(LIBS)
+ifeq ($(GRAPHBLAS_LIB_DEFAULT),$(GRAPHBLAS_LIB))
+DEPS+=$(GRAPHBLAS_LIB)
+endif
+
 
 # Build and run a test for each cpp file in directory
 TEST_SOURCES = $(wildcard *.cpp)
@@ -71,7 +74,7 @@ TEST_EXECUTABLES = $(patsubst %.cpp, %.run, $(TEST_SOURCES))
 
 # Build '*.run' binaries for each source
 %.run: %.o gtest_main.a $(DEPS)
-	@$(REDISGRAPH_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_SUPPRESS) $^ $(LDFLAGS) -o $@
+	@$(REDISGRAPH_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_SUPPRESS) $^ $(LDFLAGS) $(GRAPHBLAS_LIB) -o $@
 
 
 .PHONY: all build test test_valgrind clean
