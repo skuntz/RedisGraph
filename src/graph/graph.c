@@ -156,10 +156,13 @@ void Graph_WriterLeave(Graph *g) {
 	pthread_mutex_unlock(&g->_writers_mutex);
 }
 
-/* Force execution of all pending operations on a matrix. */
+/* Force execution of all pending operations on a matrix.
+   To be replaced by GrB_Wait(m) in a future GraphBLAS release. */
 static inline void _Graph_ApplyPending(GrB_Matrix m) {
 	GrB_Index nvals;
-	assert(GrB_Matrix_nvals(&nvals, m) == GrB_SUCCESS);
+        GrB_Info info;
+        info = GrB_Matrix_nvals(&nvals, m);
+        assert (info == GrB_SUCCESS);
 }
 
 /* ========================= Graph utility functions ========================= */
@@ -253,21 +256,20 @@ void _MatrixSynchronize(const Graph *g, RG_Matrix rg_matrix) {
 	// Lock the matrix.
 	RG_Matrix_Lock(rg_matrix);
 
-	bool pending = false;
-	GxB_Matrix_Pending(m, &pending);
+        _Graph_ApplyPending(m);
 
 	// If the matrix has pending operations or requires
 	// a resize, enter critical section.
-	if(pending || (n_rows != dims) || (n_cols != dims)) {
+	if((n_rows != dims) || (n_cols != dims)) {
 		// Double-check if resize is necessary.
 		GrB_Matrix_nrows(&n_rows, m);
 		GrB_Matrix_ncols(&n_cols, m);
 		dims = Graph_RequiredMatrixDim(g);
 		if((n_rows != dims) || (n_cols != dims)) {
-			assert(GxB_Matrix_resize(m, dims, dims) == GrB_SUCCESS);
+                     GrB_Info info = GxB_Matrix_resize(m, dims, dims);
+                     assert(info == GrB_SUCCESS);
 		}
 		// Flush changes to matrix.
-		_Graph_ApplyPending(m);
 	}
 	// Unlock matrix mutex.
 	_RG_Matrix_Unlock(rg_matrix);
