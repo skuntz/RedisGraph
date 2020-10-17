@@ -91,7 +91,7 @@ export CC_OBJECTS
 
 # .d files for each c file. These make sure that changing a header file
 # will also change the dependent .c files of it
-CC_DEPS = $(patsubst %.c, %.d, $(CC_SOURCES) )
+CC_DEPS = $(patsubst %.c, %.d, $(CC_SOURCES))
 
 # Library dependencies
 RAX=../deps/rax/rax.o
