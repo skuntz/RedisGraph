@@ -175,6 +175,7 @@ static GrB_Matrix _Eval_Mul(const AlgebraicExpression *exp, GrB_Matrix res) {
                      GxB_fprint(res, GxB_COMPLETE, stderr);
                      GxB_fprint(A, GxB_COMPLETE, stderr);
                      GxB_fprint(B, GxB_COMPLETE, stderr);
+                     GxB_fprint(desc, GxB_COMPLETE, stderr);
                      fprintf(stderr, "Encountered an error in matrix multiplication:\n%ld: %s\n", (long)info, GrB_error());
 			assert(false);
 		}
