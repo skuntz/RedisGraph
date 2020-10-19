@@ -172,6 +172,9 @@ static GrB_Matrix _Eval_Mul(const AlgebraicExpression *exp, GrB_Matrix res) {
 		info = GrB_mxm(res, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, A, B, desc);
 		if(info != GrB_SUCCESS) {
 			// If the multiplication failed, print error info to stderr and exit.
+                     GxB_fprint(res, GxB_COMPLETE, stderr);
+                     GxB_fprint(A, GxB_COMPLETE, stderr);
+                     GxB_fprint(B, GxB_COMPLETE, stderr);
                      fprintf(stderr, "Encountered an error in matrix multiplication:\n%ld: %s\n", (long)info, GrB_error());
 			assert(false);
 		}
