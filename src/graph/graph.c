@@ -590,7 +590,7 @@ void Graph_GetNodeEdges(const Graph *g, const Node *n, GRAPH_EDGE_DIR dir, int e
 
                      info = GrB_Col_extract (v, GrB_NULL, GrB_NULL, M, GrB_ALL, ncols, node_id,
                                              GrB_DESC_T0);
-                     if (info != GrB_SUCCESS) fprintf (stderr, "error %s\n", GrB_error() );
+                     if (info != GrB_SUCCESS) fprintf (stderr, "error %ld %s\n", (long)info, GrB_error ());
                      assert (info == GrB_SUCCESS);
                 } else { /* Need to special-case column vectors to act like rows. */
                      assert (node_id == 0); /* Only value possible in a vector. */
