@@ -9,7 +9,7 @@
 #include <string.h>
 #include <limits.h>
 #include "util/redis_version.h"
-#include "../deps/GraphBLAS/Include/GraphBLAS.h"
+#include <GraphBLAS.h>
 
 #define CACHE_SIZE "CACHE_SIZE"  // Config param, the size of each thread cache size, per graph.
 #define THREAD_COUNT "THREAD_COUNT" // Config param, number of threads in thread pool

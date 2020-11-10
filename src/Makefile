@@ -7,6 +7,17 @@ XXHASH_DIR = ../deps/xxHash
 REDISEARCH_DIR = ../deps/RediSearch/src
 LIBCYPHER-PARSER_DIR = ../deps/libcypher-parser/lib/src
 
+# A separate section for GraphBLAS so users know which variables to
+# set.  To build against a system-wide GraphBLAS, a user can ignore
+# GRAPHBLAS_DIR.  For example, "GRAPHBLAS_LIB=-lgraphblas" and
+# "GRAPHBLAS_INC=" (blank) work on Debian with libsuitesparse-dev
+# installed.
+GRAPHBLAS_DIR ?= ../deps/GraphBLAS
+GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build/libgraphblas.a
+GRAPHBLAS_LIB ?= $(GRAPHBLAS_LIB_DEFAULT)
+GRAPHBLAS_LDFLAGS ?=
+GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/Include
+
 # if DEBUG env var is set, we compile with "debug" cflags
 DEBUGFLAGS = -g -ggdb -O3
 ifeq ($(DEBUG), 1)
@@ -16,7 +27,7 @@ endif
 # Default CFLAGS
 CFLAGS = \
 	-Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-result \
-	-fPIC \
+	-fPIC -fcommon -fopenmp \
 	-D_GNU_SOURCE -DREDIS_MODULE_TARGET -DREDISMODULE_EXPERIMENTAL_API -DXXH_STATIC_LINKING_ONLY
 CFLAGS += $(DEBUGFLAGS)
 
@@ -90,23 +101,20 @@ export CC_OBJECTS
 
 # .d files for each c file. These make sure that changing a header file
 # will also change the dependent .c files of it
-CC_DEPS = $(patsubst %.c, %.d, $(CC_SOURCES) )
+CC_DEPS = $(patsubst %.c, %.d, $(CC_SOURCES))
 
 # Library dependencies
 RAX=../deps/rax/rax.o
 LIBXXHASH=../deps/xxHash/libxxhash.a
-#GRAPHBLAS=../deps/GraphBLAS/build/libgraphblas.a
-# The following is for x86, with the dummy SCGC API
-GRAPHBLAS=../../LucataGraphBLAS/build_x86_SCGC/SC/libLucataGraphBLAS_SCGC.a ../../LucataGraphBLAS/build_x86_SCGC/src/lib/libLucataGraphBLAS.a ../../LucataGraphBLAS/build_x86_SCGC/SC/SCGC_DUMMY/libemuapi.a
-GRAPHBLAS_INC_DIR=../../LucataGraphBLAS/src/include/
 REDISEARCH=../deps/RediSearch/build/libredisearch.a
 LIBCYPHER-PARSER=../deps/libcypher-parser/lib/src/.libs/libcypher-parser.a
 
 # Compilation deps for the module
-LIBS=$(RAX) $(GRAPHBLAS) $(REDISEARCH) $(LIBXXHASH) $(LIBCYPHER-PARSER)
+LIBS=$(RAX) $(GRAPHBLAS_LIB) $(REDISEARCH) $(LIBXXHASH) $(LIBCYPHER-PARSER)
 MODULE= $(LIBS) $(CC_OBJECTS)
 
 REDISGRAPH_CC=$(QUIET_CC)$(CC)
+REDISGRAPH_LD?=$(REDISGRAPH_CC)
 
 CCCOLOR="\033[34m"
 SRCCOLOR="\033[33m"
@@ -121,7 +129,7 @@ endif
 # Compile C file while generating a .d file for it
 %.o: %.c
 %.o: %.c
-	$(REDISGRAPH_CC) $(CFLAGS) -I. -I$(RAX_DIR) -I$(LIBCYPHER-PARSER_DIR) -I$(XXHASH_DIR) -I$(REDISEARCH_DIR) -I$(GRAPHBLAS_INC_DIR) -c $< -o $@ -MMD -MF $(@:.o=.d)
+	$(REDISGRAPH_CC) $(CFLAGS) -I. $(GRAPHBLAS_CPPFLAGS) -I$(RAX_DIR) -I$(LIBCYPHER-PARSER_DIR) -I$(XXHASH_DIR) -I$(REDISEARCH_DIR) -c $< -o $@ -MMD -MF $(@:.o=.d)
 
 all: redisgraph.so
 
@@ -137,11 +145,13 @@ $(LIBXXHASH):
 .PHONY: $(LIBXXHASH)
 
 # Build GraphBLAS only if library does not already exists.
-$(GRAPHBLAS):
-ifeq (,$(wildcard $(GRAPHBLAS)))
+ifeq ($(GRAPHBLAS_LIB_DEFAULT),$(GRAPHBLAS_LIB))
+$(GRAPHBLAS_LIB):
+ifeq (,$(wildcard $(GRAPHBLAS_LIB)))
 	@$(MAKE) -C ../deps/GraphBLAS CMAKE_OPTIONS="-DCMAKE_C_COMPILER='$(CC)'" static_only
 endif
-.PHONY: $(GRAPHBLAS)
+.PHONY: $(GRAPHBLAS_LIB)
+endif
 
 $(REDISEARCH):
 ifeq (,$(wildcard $(REDISEARCH)))
@@ -171,7 +181,7 @@ parser:
 
 # Build the module...
 redisgraph.so: $(MODULE)
-	$(REDISGRAPH_CC) -o $@ $(CC_OBJECTS) $(LIBS) $(SHOBJ_LDFLAGS) -lc -lm -lstdc++
+	$(REDISGRAPH_LD) -o $@ $(CC_OBJECTS) $(GRAPHBLAS_LDFLAGS) $(LIBS) $(SHOBJ_LDFLAGS) -lc -lm
 
 clean:
 	@find . -name '*.[oad]' -type f -delete
@@ -179,7 +189,9 @@ clean:
 ifeq ($(ALL),1)
 	@$(MAKE) -C ../deps/rax clean
 	@$(MAKE) -C ../deps/xxHash clean
+ifeq ($(GRAPHBLAS_LIB_DEFAULT), $(GRAPHBLAS_LIB))
 	@$(MAKE) -C ../deps/GraphBLAS clean
+endif
 	@$(MAKE) -C ../deps/libcypher-parser clean
 	rm -rf ../deps/RediSearch/build/      # Directly delete the RediSearch build artifacts
 endif
@@ -189,8 +201,13 @@ package: redisgraph.so
 	@mkdir -p ../build
 	@ramp pack -m "`pwd`/../ramp_manifest.yml" -v -o "../build/redisgraph.{os}-{architecture}.latest.zip" "`pwd`/redisgraph.so"
 
+.PHONY: test-build
+test-build: redisgraph.so
+	@$(MAKE) -C ../tests test-build
+
+.PHONY: test
 test: redisgraph.so
-	# check valgrind flag is not empty
+	# check valgrind <flag is not empty
 ifneq ($(VALGRIND),)
 	# valgrind is requested, check that host's os is not Linux
 ifneq ($(OS),Linux)
@@ -201,6 +218,7 @@ endif
 endif
 	@$(MAKE) -C ../tests test
 
+.PHONY: memcheck
 memcheck: CFLAGS += -fno-omit-frame-pointer -g -ggdb -O0 -D MEMCHECK
 memcheck: SHOBJ_LDFLAGS += -u RediSearch_CleanupModule
 memcheck: redisgraph.so

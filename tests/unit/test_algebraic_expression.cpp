@@ -23,7 +23,7 @@ extern "C" {
 #include "../../src/execution_plan/execution_plan.h"
 #include "../../src/arithmetic/algebraic_expression.h"
 #include "../../src/arithmetic/algebraic_expression/utils.h"
-#include "../../deps/GraphBLAS/Include/GraphBLAS.h"
+#include <GraphBLAS.h>
 
 extern AR_ExpNode **_BuildReturnExpressions(const cypher_astnode_t *ret_clause, AST *ast);
 
@@ -206,11 +206,10 @@ class AlgebraicExpressionTest: public ::testing::Test {
 	}
 
 	AlgebraicExpression **build_algebraic_expression(const char *query) {
-		GraphContext *gc = QueryCtx_GetGraphCtx();
 		cypher_parse_result_t *parse_result = cypher_parse(query, NULL, NULL, CYPHER_PARSE_ONLY_STATEMENTS);
 		AST *master_ast = AST_Build(parse_result);
 		AST *ast = AST_NewSegment(master_ast, 0, cypher_ast_query_nclauses(master_ast->root));
-		QueryGraph *qg = BuildQueryGraph(gc, ast);
+		QueryGraph *qg = BuildQueryGraph(ast);
 		AlgebraicExpression **ae = AlgebraicExpression_FromQueryGraph(qg);
 
 		uint exp_count = array_len(ae);

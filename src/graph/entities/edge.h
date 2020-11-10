@@ -10,7 +10,7 @@
 #include "node.h"
 #include "../../value.h"
 #include "graph_entity.h"
-#include "../../../deps/GraphBLAS/Include/GraphBLAS.h"
+#include <GraphBLAS.h>
 
 #define EDGE_LENGTH_INF UINT_MAX - 2
 
@@ -68,3 +68,4 @@ void Edge_ToString(const Edge *e, char **buffer, size_t *bufferLen, size_t *byte
 void Edge_Free(Edge *edge);
 
 #endif
+
