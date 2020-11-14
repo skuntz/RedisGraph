@@ -590,7 +590,6 @@ void Graph_GetNodeEdges(const Graph *g, const Node *n, GRAPH_EDGE_DIR dir, int e
 
                      info = GrB_Col_extract (v, GrB_NULL, GrB_NULL, M, GrB_ALL, ncols, node_id,
                                              GrB_DESC_T0);
-                     if (info != GrB_SUCCESS) fprintf (stderr, "error %ld %s\n", (long)info, GrB_error ());
                      assert (info == GrB_SUCCESS);
                 } else { /* Need to special-case column vectors to act like rows. */
                      assert (node_id == 0); /* Only value possible in a vector. */
@@ -649,7 +648,7 @@ void Graph_GetNodeEdges(const Graph *g, const Node *n, GRAPH_EDGE_DIR dir, int e
                 GrB_Vector_nvals (&nvals, v);
                 if (nvals) {
                      if (nvals > idx_storage_len) {
-                          GrB_Index *tmp = realloc (idx_storage, idx_storage_len * sizeof(*tmp));
+                          GrB_Index *tmp = rm_realloc (idx_storage, nvals * sizeof(*tmp));
                           assert (tmp != NULL);
                           idx_storage = tmp;
                           idx_storage_len = nvals;
@@ -790,11 +789,9 @@ static void free_edge (Graph *g, EdgeID id)
           DataBlock_DeleteItem (g->edges, SINGLE_EDGE_ID(id));
      } else {
          EdgeID *ids = (EdgeID *) id;
-         //if (*ids == NULL) return;
          uint id_count = array_len(ids);
          for (uint i = 0; i < id_count; i++) DataBlock_DeleteItem(g->edges, ids[i]);
          if (id_count > 0) array_free(ids);
-         //*ids = NULL;
      }
 }
 
@@ -808,12 +805,15 @@ static void _Graph_FreeRelationMatrixEdges(Graph *g, GrB_Matrix grb_matrix, GrB_
 
         info = GrB_Matrix_nvals (&nvals, grb_matrix);
         assert(info == GrB_SUCCESS);
+        if (nvals == 0) return;
         if (nvals > nvals_alloc) {
              EdgeID *tmp_e;
-             tmp_e = realloc (val, nvals * sizeof (*val));
-             assert(tmp_e);
-             val = tmp_e;
+             tmp_e = rm_realloc (val, nvals * sizeof (*val));
+             assert (tmp_e != NULL);
+             *valptr = val = tmp_e;
+             *nvals_alloc_ptr = nvals;
         }
+        assert (val != NULL);
 
 #if !defined(NDEBUG)
         nvals_saved = nvals;
@@ -875,6 +875,8 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
 
         dim = Graph_RequiredMatrixDim (g);
 
+        node_idx = rm_malloc (node_count * sizeof (*node_idx));
+        assert(node_idx != NULL);
         for(uint i = 0; i < node_count; i++)
              node_idx[i] = ENTITY_GET_ID(nodes + i);
 
@@ -898,10 +900,6 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                            GrB_DESC_T0);
         assert(info == GrB_SUCCESS);
 
-        // FIXME: This computation isn't right. Should be 2 nodes and 4 edges deleted.
-	*node_deleted += DataBlock_DeletedItemsCount (g->nodes);
-	*edge_deleted += DataBlock_DeletedItemsCount (g->edges);
-
 	// Free and remove implicit edges from relation matrices.
         GrB_Index nvals_alloc = 0;
         EdgeID *val = NULL;
@@ -920,19 +918,6 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                 assert(info == GrB_SUCCESS);
                 _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
 
-                info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, GrB_ALL, dim, node_idx, node_count,
-                                    GrB_DESC_T0);
-                assert(info == GrB_SUCCESS);
-                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
-
-                /* if (update_transpose) { */
-                /*      info = GrB_extract (tmp, GrB_NULL, GrB_NULL, Rt, GrB_ALL, dim, node_idx, node_count, */
-                /*                          GrB_DESC_T0); */
-                /*      assert(info == GrB_SUCCESS); */
-                /*      // XXX: Apparently the transpose may hold different edge IDs? */
-                /*      _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val); */
-                /* } */
-
                 GrB_Matrix_clear (tmp);
                 info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, node_idx, node_count, GrB_ALL, dim,
                                    GrB_NULL);
@@ -942,6 +927,7 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                                         GrB_NULL);
                      assert(info == GrB_SUCCESS);
                 }
+
                 info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
                                    GrB_DESC_T0);
                 assert(info == GrB_SUCCESS);
@@ -968,7 +954,12 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
 		DataBlock_DeleteItem(g->nodes, ENTITY_GET_ID(n));
 	}
 
+        // FIXME: This computation isn't right. Should be 2 nodes and 4 edges deleted.
+	*node_deleted += DataBlock_DeletedItemsCount (g->nodes);
+	*edge_deleted += DataBlock_DeletedItemsCount (g->edges);
+
 	// Clean up.
+        rm_free (node_idx);
         free (val);
 	GrB_free (&tmp);
 }
@@ -1102,6 +1093,8 @@ static void _BulkDeleteEdges(Graph *g, Edge *edges, size_t edge_count) {
 	}
 }
 
+#define is_entity_lt(a, b) (ENTITY_GET_ID((a)) < ENTITY_GET_ID((b)))
+
 /* Removes both nodes and edges from graph. */
 void Graph_BulkDelete(Graph *g, Node *nodes, uint node_count, Edge *edges, uint edge_count,
 					  uint *node_deleted, uint *edge_deleted) {
@@ -1110,7 +1103,20 @@ void Graph_BulkDelete(Graph *g, Node *nodes, uint node_count, Edge *edges, uint 
 	*edge_deleted = 0;
 	*node_deleted = 0;
 
-	if(node_count) _BulkDeleteNodes(g, nodes, node_count, node_deleted, edge_deleted);
+	if(node_count) {
+             /* Remove duplicates. */
+             QSORT(Node, nodes, node_count, is_entity_lt);
+             size_t uniqueIdx = 0;
+             for(uint i = 0; i < node_count; i++) {
+                  // As long as current is the same as follows.
+                  while(i < node_count - 1 && ENTITY_GET_ID(nodes + i) == ENTITY_GET_ID(nodes + i + 1)) i++;
+
+                  if(uniqueIdx < i) nodes[uniqueIdx] = nodes[i];
+                  uniqueIdx++;
+             }
+             node_count = uniqueIdx;
+             _BulkDeleteNodes(g, nodes, node_count, node_deleted, edge_deleted);
+        }
 
 	if(edge_count) {
 		// Filter out explicit edges which were removed by _BulkDeleteNodes.
@@ -1137,8 +1143,8 @@ void Graph_BulkDelete(Graph *g, Node *nodes, uint node_count, Edge *edges, uint 
 		if(edge_count == 0) return;
 
 		// Removing duplicates.
-#define is_edge_lt(a, b) (ENTITY_GET_ID((a)) < ENTITY_GET_ID((b)))
-		QSORT(Edge, edges, edge_count, is_edge_lt);
+#define is_entity_lt(a, b) (ENTITY_GET_ID((a)) < ENTITY_GET_ID((b)))
+		QSORT(Edge, edges, edge_count, is_entity_lt);
 
 		size_t uniqueIdx = 0;
 		for(int i = 0; i < edge_count; i++) {
