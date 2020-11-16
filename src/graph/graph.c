@@ -928,6 +928,12 @@ static void _BulkDeleteNodes(Graph *g, Node *nodes, uint node_count,
                      assert(info == GrB_SUCCESS);
                 }
 
+                info = GrB_extract (tmp, GrB_NULL, GrB_NULL, R, node_idx, node_count, GrB_ALL, dim,
+                                    GrB_DESC_T0);
+                assert(info == GrB_SUCCESS);
+                _Graph_FreeRelationMatrixEdges (g, tmp, &nvals_alloc, &val);
+
+                GrB_Matrix_clear (tmp);
                 info = GrB_assign (R, GrB_NULL, GrB_NULL, tmp, GrB_ALL, dim, node_idx, node_count,
                                    GrB_DESC_T0);
                 assert(info == GrB_SUCCESS);
@@ -1143,7 +1149,6 @@ void Graph_BulkDelete(Graph *g, Node *nodes, uint node_count, Edge *edges, uint 
 		if(edge_count == 0) return;
 
 		// Removing duplicates.
-#define is_entity_lt(a, b) (ENTITY_GET_ID((a)) < ENTITY_GET_ID((b)))
 		QSORT(Edge, edges, edge_count, is_entity_lt);
 
 		size_t uniqueIdx = 0;
