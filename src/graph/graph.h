@@ -124,6 +124,13 @@ void Graph_AllocateNodes(
 	size_t n                // Number of nodes to create.
 );
 
+void Graph_BuildNodeMatrix(
+        Graph *g;
+        int label;
+        int count;
+);
+
+
 // Make sure graph can hold an additional N edges.
 void Graph_AllocateEdges(
 	Graph *g,               // Graph for which nodes will be added.

@@ -451,6 +451,28 @@ void Graph_GetEdgesConnectingNodes(const Graph *g, NodeID srcID, NodeID destID, 
 	}
 }
 
+void Graph_BuildNodeMatrix(Graph *g, int label, int count){
+
+    bool *node_idx = (bool *) malloc (sizeof(bool) * count);
+    GrB_Index *I= (GrB_Index *) malloc (sizeof(GrB_Index) * count);
+    GrB_Index *J= (GrB_Index *) malloc (sizeof(GrB_Index) * count);
+    for (int i=0; i < count; ++i){
+        node_idx[i] = 1;
+        I[i] = i;
+        J[i] = i;
+    }
+
+    GrB_Index nvals = (GrB_Index) count;
+
+    if(label != GRAPH_NO_LABEL) {
+        // Try to set matrix at position [id, id]
+        RG_Matrix matrix = g->labels[label];
+        _MatrixResizeToCapacity(g, matrix);
+        GrB_Matrix m = RG_Matrix_Get_GrB_Matrix(matrix);
+        GrB_Info res = GrB_Matrix_build_BOOL(m, I, J, node_idx, nvals, GrB_FIRST_BOOL);
+    }
+}
+
 void Graph_CreateNode(Graph *g, int label, Node *n) {
 	assert(g);
 

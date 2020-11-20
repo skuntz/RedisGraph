@@ -97,13 +97,24 @@ int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const cha
 	size_t data_idx = 0;
 
 	int label_id;
+	long node_count = 0;
 	unsigned int prop_count;
 	Attribute_ID *prop_indicies = _BulkInsert_ReadHeader(gc, SCHEMA_NODE, data, &data_idx, &label_id,
 														 &prop_count);
 
 	while(data_idx < data_len) {
 		Node n;
-		Graph_CreateNode(gc->g, label_id, &n);
+		//Graph_CreateNode(gc->g, label_id, &n);
+		Graph *g = gc->g;
+		NodeID id;
+		Entity *en = DataBlock_AllocateItem(g->nodes, &id);
+		n.id = id;
+		n.entity = en;
+		en->prop_count = 0;
+		en->properties = NULL;
+
+
+		
 		for(unsigned int i = 0; i < prop_count; i++) {
 			SIValue value = _BulkInsert_ReadProperty(data, &data_idx);
 			// Cypher does not support NULL as a property value.
@@ -111,8 +122,11 @@ int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const cha
 			if(SI_TYPE(value) == T_NULL) continue;
 			GraphEntity_AddProperty((GraphEntity *)&n, prop_indicies[i], value);
 		}
+		++node_count;
 	}
 
+	Graph_BuildNodeMatrix(gc->g, label_id, node_count);
+	
 	free(prop_indicies);
 	return BULK_OK;
 }
