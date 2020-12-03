@@ -31,24 +31,33 @@ bool IsAcyclicGraph(const QueryGraph *qg) {
 	res = GrB_Matrix_new(&t, GrB_BOOL, node_count, node_count);
 	assert(res == GrB_SUCCESS);
 
+	printf("After new:\n");
+	GxB_Matrix_fprint(c, "c", (GxB_Print_Level) 3, stdout);
+
 	/* Perform traversals, stop when:
 	* 1. Node i manged to reach itself, x[i,i] is set (cycle detected).
 	* 2. After edge_count multiplications, no cycles. */
 	for(uint i = 0; i < edge_count; i++) {
 		// c = c * m.
 		res = GrB_mxm(c, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, c, m, GrB_NULL);
+		printf("After mxm\n");
+		GxB_Matrix_fprint(c, "c", (GxB_Print_Level) 3, stdout);
 		assert(res == GrB_SUCCESS);
 
 		/*  Extract main diagonal of `c` into `t`.
 		 * Check if C[i,i] is set.
 		 * t = c<identity> */
 		res = GxB_Matrix_select(t, GrB_NULL, GrB_NULL, GxB_DIAG, c, GrB_NULL, GrB_NULL);
+        printf("After mxm\n");
+        GxB_Matrix_fprint(c, "c", (GxB_Print_Level) 3, stdout);
 		assert(res == GrB_SUCCESS);
+
 
 		/* How many entries are there in `t`?
 		 * if there are any entires in `t` this means node `k` was able to reach itself cycle! */
 		GrB_Index nvals = 0;
 		res = GrB_Matrix_nvals(&nvals, t);
+		printf(" nvals = %ld\n", nvals); fflush(stdout);
 		assert(res == GrB_SUCCESS);
 		if(nvals != 0) {
 			acyclic = false;

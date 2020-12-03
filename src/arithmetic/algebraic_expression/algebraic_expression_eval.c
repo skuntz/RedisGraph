@@ -9,6 +9,8 @@
 #include "../algebraic_expression.h"
 #include "lucata_state.h"
 
+#include <sys/time.h>
+
 extern LucataState *g_lucataState;
 
 // Forward declarations
@@ -136,6 +138,10 @@ static GrB_Matrix _Eval_Mul(const AlgebraicExpression *exp, GrB_Matrix res) {
 		   AlgebraicExpression_ChildCount(exp) > 1 &&
 		   AlgebraicExpression_OperationCount(exp, AL_EXP_MUL) == 1);
 
+
+	struct timeval t0, t1;
+	gettimeofday(&t0, NULL);
+
 	GrB_Matrix A;
 	GrB_Matrix B;
 	GrB_Info info;
@@ -172,7 +178,11 @@ static GrB_Matrix _Eval_Mul(const AlgebraicExpression *exp, GrB_Matrix res) {
 		}
 	} else {
 		// Perform multiplication.
+        printf("In algebraic_expression_eval: Before mxm\n");
+        GxB_Matrix_fprint(res, "res", (GxB_Print_Level) 3, stdout);
 		info = GrB_mxm(res, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, A, B, desc);
+        printf("In algebraic_expression_eval: After mxm\n");
+        GxB_Matrix_fprint(res, "res", (GxB_Print_Level) 3, stdout);
 		if(info != GrB_SUCCESS) {
 			// If the multiplication failed, print error info to stderr and exit.
                      fprintf(stderr, "Encountered an error in matrix multiplication:\n%ld: %s\n", (long)info, GrB_error());
@@ -219,6 +229,11 @@ static GrB_Matrix _Eval_Mul(const AlgebraicExpression *exp, GrB_Matrix res) {
     if (g_lucataState && g_lucataState->m_runningKhop) {
          g_lucataState->m_khopResultsAvailable = true;
     }
+
+    gettimeofday(&t1, NULL);
+
+    double elapsedTime = (t1.tv_sec - t0.tv_sec) + (t1.tv_usec - t0.tv_usec) / 1.0e6;
+    printf("Elapsed time in k-hop mxms: %f seconds \n", elapsedTime);
 
 	return res;
 }
