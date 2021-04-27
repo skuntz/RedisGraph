@@ -14,10 +14,14 @@ LIBCYPHER-PARSER_DIR = ../deps/libcypher-parser/lib/src
 # GRAPHBLAS_DIR.  For example, "GRAPHBLAS_LIB=-lgraphblas" and
 # "GRAPHBLAS_INC=" (blank) work on Debian with libsuitesparse-dev
 # installed.
-GRAPHBLAS_DIR ?= ../deps/GraphBLAS
-GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build/libgraphblas.a
+#GRAPHBLAS_DIR ?= ../deps/GraphBLAS
+GRAPHBLAS_DIR ?= ../../LGBNov
+#GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build/libgraphblas.a
+GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build_x86_SCGC/SC/libLucataGraphBLAS_SCGC.a $(GRAPHBLAS_DIR)/build_x86_SCGC/src/lib/libLucataGraphBLAS.a $(GRAPHBLAS_DIR)/build_x86_SCGC/SC/SCGC_DUMMY/libemuapi.a
 GRAPHBLAS_LIB ?= $(GRAPHBLAS_LIB_DEFAULT)
-GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/Include
+GRAPHBLAS_LDFLAGS ?=
+#GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/Include
+GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/src/include
 
 # if DEBUG env var is set, we compile with "debug" cflags
 DEBUGFLAGS = -g -ggdb -O3
@@ -117,6 +121,7 @@ LIBS=$(RAX) $(GRAPHBLAS_LIB) $(REDISEARCH) $(LIBXXHASH) $(LIBCYPHER-PARSER)
 MODULE= $(LIBS) $(CC_OBJECTS)
 
 REDISGRAPH_CC=$(QUIET_CC)$(CC)
+REDISGRAPH_LD?=$(REDISGRAPH_CC)
 
 CCCOLOR="\033[34m"
 SRCCOLOR="\033[33m"
@@ -183,7 +188,7 @@ parser:
 
 # Build the module...
 redisgraph.so: $(MODULE)
-	$(REDISGRAPH_CC) -o $@ $(CC_OBJECTS) $(LIBS) $(SHOBJ_LDFLAGS) $(GRAPHBLAS_LIB) -lc -lm
+	$(REDISGRAPH_LD) -o $@ $(CC_OBJECTS) $(GRAPHBLAS_LDFLAGS) $(LIBS) $(SHOBJ_LDFLAGS) -lc -lm -lstdc++
 
 clean:
 	@find . -name '*.[oad]' -type f -delete
