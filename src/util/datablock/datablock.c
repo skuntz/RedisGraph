@@ -149,8 +149,8 @@ uint64_t DataBlock_BulkAllocateItems(DataBlock *dataBlock, uint64_t n_to_alloc)
 	// Make sure we've got room for items.
 	if(dataBlock->itemCount + n_to_alloc >= dataBlock->itemCap) {
 		// Allocate twice as much items then we currently hold.
-		const uint newCap = dataBlock->itemCount * 2;
-		const uint requiredAdditionalBlocks = ITEM_COUNT_TO_BLOCK_COUNT(newCap);
+		const uint newCap = dataBlock->itemCount + n_to_alloc;
+		const uint requiredAdditionalBlocks = ITEM_COUNT_TO_BLOCK_COUNT(newCap) - dataBlock->blockCount;
 		_DataBlock_AddBlocks(dataBlock, requiredAdditionalBlocks);
 	}
 
