@@ -308,6 +308,11 @@ int BulkInsert(RedisModuleCtx *ctx, GraphContext *gc, RedisModuleString **argv, 
 		return BULK_FAIL;
 	}
 
+    time_t start, start1, end;
+	int msec;
+	start = clock();
+	printf("BulkInsert: start = %ld \n", start); fflush(stdout);
+
 	// Read the number of node tokens
 	long long node_token_count;
 	long long relation_token_count;
@@ -323,28 +328,45 @@ int BulkInsert(RedisModuleCtx *ctx, GraphContext *gc, RedisModuleString **argv, 
 	argc -= 2;
 
 	if(node_token_count > 0) {
+	    start1 = clock();
+	    printf("BulkInsert_InsertNodes: \n"); fflush(stdout);
 		int rc = _BulkInsert_InsertNodes(ctx, gc, node_token_count, &argv, &argc);
+        end = clock();
+        msec = (int) (end - start1) * 1000 / CLOCKS_PER_SEC;
+        printf(" total time %d sec %d ms\n", msec/1000, msec % 1000); fflush(stdout);
 		if(rc != BULK_OK) {
 			return BULK_FAIL;
 		} else if(argc == 0) {
 			return BULK_OK;
 		}
+
 	}
 
 	if(relation_token_count > 0) {
+
+	    start1 = clock();
+        printf("BulkInsert_InsertEdges: \n"); fflush(stdout);
+
                 NodeID *I, *J;  // Imported vertex scratch space.
                 I = rm_malloc (2 * relations_in_query * sizeof (*I));
                 if (!I) return BULK_FAIL;
                 J = &I[relations_in_query];
 		int rc = _BulkInsert_Insert_Edges(ctx, gc, relation_token_count, &argv, &argc, I, J);
+        end = clock();
+        msec = (int) (end - start1) * 1000 / CLOCKS_PER_SEC;
+        printf("   total time %d sec %d ms\n", msec/1000, msec % 1000); fflush(stdout);
 		if(rc != BULK_OK) {
 			return BULK_FAIL;
 		} else if(argc == 0) {
 			return BULK_OK;
 		}
+
+
 	}
 
 	ASSERT(argc == 0);
+
+
 
 	return BULK_OK;
 }
