@@ -3,7 +3,6 @@
 *
 * This file is available under the Redis Labs Source Available License Agreement
 */
-
 #include "bulk_insert.h"
 #include "RG.h"
 #include "../schema/schema.h"
@@ -90,7 +89,6 @@ static Attribute_ID *_BulkInsert_ReadHeader(GraphContext *gc, SchemaType t,
 	 */
 
     int msec;
-    printf("_BulkInsert_ReadHeader: \n"); fflush(stdout);
     start_exec_timer();
 
 	// First sequence is entity name
@@ -115,6 +113,7 @@ static Attribute_ID *_BulkInsert_ReadHeader(GraphContext *gc, SchemaType t,
 		// Add properties to schemas
 		prop_indicies[j] = GraphContext_FindOrAddAttribute(gc, prop_key);
 	}
+    printf("_BulkInsert_ReadHeader:"); fflush(stdout);
     print_exec_timer();
 
 	return prop_indicies;
@@ -133,7 +132,7 @@ static inline SIValue _BulkInsert_ReadProperty(const char *data, size_t *data_id
 	 */
 
     int msec;
-    printf("_BulkInsert_ReadProperty: \n"); fflush(stdout);
+
     start_exec_timer();
 
 	SIValue v = SI_NullVal();
@@ -171,7 +170,8 @@ static inline SIValue _BulkInsert_ReadProperty(const char *data, size_t *data_id
 	} else {
 		ASSERT(false);
 	}
-	print_exec_timer();
+    //printf("_BulkInsert_ReadProperty: "); fflush(stdout);
+	//print_exec_timer();
 	return v;
 }
 
@@ -179,7 +179,7 @@ int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const cha
 								size_t data_len) {
 
     int msec;
-    printf("_BulkInsert_ProcessNodeFile: \n"); fflush(stdout);
+
     start_exec_timer();
 
 	size_t data_idx = 0;
@@ -239,6 +239,7 @@ int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const cha
         }
 
 	free(prop_indicies);
+    printf("_BulkInsert_ProcessNodeFile:"); fflush(stdout);
     print_exec_timer();
 	return BULK_OK;
 }
@@ -247,7 +248,7 @@ int _BulkInsert_ProcessRelationFile(RedisModuleCtx *ctx, GraphContext *gc, const
                                     size_t data_len, NodeID* I, NodeID *J) {
 
     int msec;
-    printf("_BulkInsert_ProcessRelationFile: \n"); fflush(stdout);
+
     start_exec_timer();
 
 	size_t data_idx = 0;
@@ -343,6 +344,7 @@ int _BulkInsert_ProcessRelationFile(RedisModuleCtx *ctx, GraphContext *gc, const
         }
 
 	free(prop_indicies);
+    printf("_BulkInsert_ProcessRelationFile:"); fflush(stdout);
     print_exec_timer();
 	return BULK_OK;
 }
@@ -350,7 +352,7 @@ int _BulkInsert_ProcessRelationFile(RedisModuleCtx *ctx, GraphContext *gc, const
 int _BulkInsert_InsertNodes(RedisModuleCtx *ctx, GraphContext *gc, int token_count,
 							RedisModuleString ***argv, int *argc) {
     int msec;
-    printf("_BulkInsert_InsertNodes: \n"); fflush(stdout);
+
     start_exec_timer();
 
 	int rc;
@@ -364,6 +366,7 @@ int _BulkInsert_InsertNodes(RedisModuleCtx *ctx, GraphContext *gc, int token_cou
 		UNUSED(rc);
 		ASSERT(rc == BULK_OK);
 	}
+    printf("_BulkInsert_InsertNodes: "); fflush(stdout);
 	print_exec_timer();
 	return BULK_OK;
 }
@@ -373,7 +376,7 @@ int _BulkInsert_Insert_Edges(RedisModuleCtx *ctx, GraphContext *gc, int token_co
                              NodeID* I, NodeID* J) {
 
     int msec;
-    printf("_BulkInsert_Insert_Edges: \n"); fflush(stdout);
+
     start_exec_timer();
 
 	int rc;
@@ -387,6 +390,7 @@ int _BulkInsert_Insert_Edges(RedisModuleCtx *ctx, GraphContext *gc, int token_co
 		UNUSED(rc);
 		ASSERT(rc == BULK_OK);
 	}
+    printf("_BulkInsert_Insert_Edges:"); fflush(stdout);
 	print_exec_timer();
 	return BULK_OK;
 }
@@ -421,11 +425,13 @@ int BulkInsert(RedisModuleCtx *ctx, GraphContext *gc, RedisModuleString **argv, 
 	if(node_token_count > 0) {
 	    start_exec_timer();
 	    start1 = clock();
-	    printf("BulkInsert_InsertNodes: \n"); fflush(stdout);
+
 		int rc = _BulkInsert_InsertNodes(ctx, gc, node_token_count, &argv, &argc);
         end = clock();
         msec = (int) (end - start1) * 1000 / CLOCKS_PER_SEC;
+        printf("BulkInsert_InsertNodes:"); fflush(stdout);
         printf(" total time %d sec %d ms\n", msec/1000, msec % 1000); fflush(stdout);
+
         print_exec_timer();
 		if(rc != BULK_OK) {
 			return BULK_FAIL;
@@ -438,7 +444,7 @@ int BulkInsert(RedisModuleCtx *ctx, GraphContext *gc, RedisModuleString **argv, 
 	if(relation_token_count > 0) {
         start_exec_timer();
 	    start1 = clock();
-        printf("BulkInsert_InsertEdges: \n"); fflush(stdout);
+
 
                 NodeID *I, *J;  // Imported vertex scratch space.
                 I = rm_malloc (2 * relations_in_query * sizeof (*I));
@@ -447,6 +453,7 @@ int BulkInsert(RedisModuleCtx *ctx, GraphContext *gc, RedisModuleString **argv, 
 		int rc = _BulkInsert_Insert_Edges(ctx, gc, relation_token_count, &argv, &argc, I, J);
         end = clock();
         msec = (int) (end - start1) * 1000 / CLOCKS_PER_SEC;
+        printf("BulkInsert_InsertEdges:"); fflush(stdout);
         printf("   total time %d sec %d ms\n", msec/1000, msec % 1000); fflush(stdout);
         print_exec_timer();
 		if(rc != BULK_OK) {
