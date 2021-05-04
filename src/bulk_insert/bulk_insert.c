@@ -88,6 +88,11 @@ static Attribute_ID *_BulkInsert_ReadHeader(GraphContext *gc, SchemaType t,
 	 * - property count : 4-byte unsigned integer
 	 * [0..property_count] : null-terminated C string
 	 */
+
+    int msec;
+    printf("_BulkInsert_ReadHeader: \n"); fflush(stdout);
+    start_exec_timer();
+
 	// First sequence is entity name
 	const char *name = data + *data_idx;
 	*data_idx += strlen(name) + 1;
@@ -110,6 +115,7 @@ static Attribute_ID *_BulkInsert_ReadHeader(GraphContext *gc, SchemaType t,
 		// Add properties to schemas
 		prop_indicies[j] = GraphContext_FindOrAddAttribute(gc, prop_key);
 	}
+    print_exec_timer();
 
 	return prop_indicies;
 }
@@ -125,6 +131,10 @@ static inline SIValue _BulkInsert_ReadProperty(const char *data, size_t *data_id
 	 * - Null-terminated C string if type is string
 	 * - 8-byte array length followed by N values if type is array
 	 */
+
+    int msec;
+    printf("_BulkInsert_ReadProperty: \n"); fflush(stdout);
+    start_exec_timer();
 
 	SIValue v = SI_NullVal();
 	TYPE t = data[*data_idx];
@@ -161,11 +171,17 @@ static inline SIValue _BulkInsert_ReadProperty(const char *data, size_t *data_id
 	} else {
 		ASSERT(false);
 	}
+	print_exec_timer();
 	return v;
 }
 
 int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const char *data,
 								size_t data_len) {
+
+    int msec;
+    printf("_BulkInsert_ProcessNodeFile: \n"); fflush(stdout);
+    start_exec_timer();
+
 	size_t data_idx = 0;
         Graph *g = gc->g;
 
@@ -223,11 +239,17 @@ int _BulkInsert_ProcessNodeFile(RedisModuleCtx *ctx, GraphContext *gc, const cha
         }
 
 	free(prop_indicies);
+    print_exec_timer();
 	return BULK_OK;
 }
 
 int _BulkInsert_ProcessRelationFile(RedisModuleCtx *ctx, GraphContext *gc, const char *data,
                                     size_t data_len, NodeID* I, NodeID *J) {
+
+    int msec;
+    printf("_BulkInsert_ProcessRelationFile: \n"); fflush(stdout);
+    start_exec_timer();
+
 	size_t data_idx = 0;
 
 	int reltype_id;
@@ -321,11 +343,16 @@ int _BulkInsert_ProcessRelationFile(RedisModuleCtx *ctx, GraphContext *gc, const
         }
 
 	free(prop_indicies);
+    print_exec_timer();
 	return BULK_OK;
 }
 
 int _BulkInsert_InsertNodes(RedisModuleCtx *ctx, GraphContext *gc, int token_count,
 							RedisModuleString ***argv, int *argc) {
+    int msec;
+    printf("_BulkInsert_InsertNodes: \n"); fflush(stdout);
+    start_exec_timer();
+
 	int rc;
 	for(int i = 0; i < token_count; i ++) {
 		size_t len;
@@ -337,12 +364,18 @@ int _BulkInsert_InsertNodes(RedisModuleCtx *ctx, GraphContext *gc, int token_cou
 		UNUSED(rc);
 		ASSERT(rc == BULK_OK);
 	}
+	print_exec_timer();
 	return BULK_OK;
 }
 
 int _BulkInsert_Insert_Edges(RedisModuleCtx *ctx, GraphContext *gc, int token_count,
                              RedisModuleString ***argv, int *argc,
                              NodeID* I, NodeID* J) {
+
+    int msec;
+    printf("_BulkInsert_Insert_Edges: \n"); fflush(stdout);
+    start_exec_timer();
+
 	int rc;
 	for(int i = 0; i < token_count; i ++) {
 		size_t len;
@@ -354,6 +387,7 @@ int _BulkInsert_Insert_Edges(RedisModuleCtx *ctx, GraphContext *gc, int token_co
 		UNUSED(rc);
 		ASSERT(rc == BULK_OK);
 	}
+	print_exec_timer();
 	return BULK_OK;
 }
 
