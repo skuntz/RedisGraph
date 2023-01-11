@@ -14,10 +14,22 @@ LIBCYPHER-PARSER_DIR = ../deps/libcypher-parser/lib/src
 # GRAPHBLAS_DIR.  For example, "GRAPHBLAS_LIB=-lgraphblas" and
 # "GRAPHBLAS_INC=" (blank) work on Debian with libsuitesparse-dev
 # installed.
-GRAPHBLAS_DIR ?= ../deps/GraphBLAS
-GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build/libgraphblas.a
+#GRAPHBLAS_DIR ?= ../deps/GraphBLAS
+#GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build/libgraphblas.a
+#GRAPHBLAS_LIB ?= $(GRAPHBLAS_LIB_DEFAULT)
+#GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/Include
+
+# Lucata RedisGraph - condor6 paths
+#GRAPHBLAS_DIR ?= /root/skuntz/LGB_2022Nov15_v1p2
+#GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build_scgc/SC/libLucataGraphBLAS_SCGC.a -L/usr/lib64 -L/lib64 -lemuapi -lrpc -lemuloader
+#GRAPHBLAS_LIB ?= $(GRAPHBLAS_LIB_DEFAULT)
+#GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/src/include -I$(GRAPHBLAS_DIR)/include
+
+# Lucata RedisGraph - PF-I Paths (bigtwin-d)
+GRAPHBLAS_DIR ?= /home/skuntz/LGB_v1p2_pfi
+GRAPHBLAS_LIB_DEFAULT = $(GRAPHBLAS_DIR)/build_scgc/SC/libLucataGraphBLAS_SCGC.a -L/home/esmith/pf_ctrl_repos/09_19_2022/pf-ctrl/build/pf-ctrl-2.7.0-api/lib64 -llctaapi -lrpc -lemuloader
 GRAPHBLAS_LIB ?= $(GRAPHBLAS_LIB_DEFAULT)
-GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/Include
+GRAPHBLAS_CPPFLAGS ?= -I$(GRAPHBLAS_DIR)/src/include -I$(GRAPHBLAS_DIR)/include
 
 # if DEBUG env var is set, we compile with "debug" cflags
 DEBUGFLAGS = -g -ggdb -O3
